@@ -22,9 +22,15 @@ async function getDbPassword(): Promise<string> {
     const response = await client.send(command);
     
     if (response.SecretString) {
-      const secret = JSON.parse(response.SecretString);
-      console.log('[Database] Password loaded from Secrets Manager');
-      return secret.password || secret;
+      // JSON 형식이면 파싱, 아니면 그대로 사용
+      try {
+        const secret = JSON.parse(response.SecretString);
+        console.log('[Database] Password loaded from Secrets Manager (JSON)');
+        return secret.password || secret;
+      } catch {
+        console.log('[Database] Password loaded from Secrets Manager (plain text)');
+        return response.SecretString;
+      }
     }
   }
 
