@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: image-generator
+  namespace: default
+  labels:
+    app: image-generator
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: image-generator
+  template:
+    metadata:
+      labels:
+        app: image-generator
+        version: v1
+    spec:
+      serviceAccountName: library-service-account
+      containers:
+        - name: image-generator
+          image: 324547056370.dkr.ecr.us-east-1.amazonaws.com/image-generator:latest
+          ports:
+            - containerPort: 8002
+          env:
+            - name: PORT
+              value: "8002"
+            - name: DB_HOST
+              value: "fproject-dev-postgres.c9eksq6cmh3c.us-east-1.rds.amazonaws.com"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: "fproject_db"
+            - name: DB_USER
+              value: "fproject_user"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: library-db-secret
+                  key: password
+            - name: AWS_REGION
+              value: "us-east-1"
+            - name: S3_BUCKET
+              value: "library-bucket-youkkk"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 5
+            periodSeconds: 5
