@@ -5,7 +5,7 @@ History 콘텐츠를 기반으로 AI 이미지를 자동 생성하는 API 서비
 ## Base URL
 
 ```
-https://image.aws11.shop/api/v1
+http://image.aws11.shop:8002/api/v1
 ```
 
 > 클러스터 내부에서 호출시: `http://image-generator-service:8002/api/v1`
