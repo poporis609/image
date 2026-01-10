@@ -7,7 +7,7 @@ metadata:
     app: image-generator
     version: v1
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: image-generator
@@ -45,11 +45,11 @@ spec:
               value: "library-bucket-youkkk"
           resources:
             requests:
-              cpu: 250m
-              memory: 256Mi
+              cpu: 100m
+              memory: 128Mi
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: 300m
+              memory: 256Mi
           livenessProbe:
             httpGet:
               path: /health
