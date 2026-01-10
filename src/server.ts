@@ -7,7 +7,7 @@
 import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
-import { closePool } from './services/database.js';
+import { initPool, closePool } from './services/database.js';
 import {
   getHistoriesWithoutImage,
   getHistoryById,
@@ -284,14 +284,26 @@ process.on('SIGINT', async () => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log('='.repeat(60));
-  console.log('🚀 Image Generator API Server');
-  console.log('='.repeat(60));
-  console.log(`📡 Server running on port ${PORT}`);
-  console.log(`📖 Health check: http://localhost:${PORT}/health`);
-  console.log(`🎨 API Base: http://localhost:${PORT}/api/v1`);
-  console.log('='.repeat(60));
-});
+async function start() {
+  try {
+    await initPool();
+    console.log('[Server] Database connected');
+    
+    app.listen(PORT, () => {
+      console.log('='.repeat(60));
+      console.log('🚀 Image Generator API Server');
+      console.log('='.repeat(60));
+      console.log(`📡 Server running on port ${PORT}`);
+      console.log(`📖 Health check: http://localhost:${PORT}/health`);
+      console.log(`🎨 API Base: http://localhost:${PORT}/api/v1`);
+      console.log('='.repeat(60));
+    });
+  } catch (error) {
+    console.error('[Server] Failed to start:', error);
+    process.exit(1);
+  }
+}
+
+start();
 
 export default app;

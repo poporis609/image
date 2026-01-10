@@ -34,11 +34,10 @@ spec:
               value: "fproject_db"
             - name: DB_USER
               value: "fproject_user"
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: library-db-secret
-                  key: password
+            - name: USE_SECRETS_MANAGER
+              value: "true"
+            - name: DB_SECRET_NAME
+              value: "library-api/db-password"
             - name: AWS_REGION
               value: "us-east-1"
             - name: S3_BUCKET
