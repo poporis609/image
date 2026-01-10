@@ -36,6 +36,10 @@ app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'image-generator', timestamp: new Date().toISOString() });
 });
 
+app.get('/api/v1/health', (_req: Request, res: Response) => {
+  res.json({ status: 'ok', service: 'image-generator', timestamp: new Date().toISOString() });
+});
+
 /**
  * GET /api/v1/histories/without-image
  * 이미지가 없는 History 목록 조회

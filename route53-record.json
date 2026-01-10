@@ -1,0 +1,16 @@
+{
+  "Changes": [
+    {
+      "Action": "CREATE",
+      "ResourceRecordSet": {
+        "Name": "image.aws11.shop",
+        "Type": "A",
+        "AliasTarget": {
+          "HostedZoneId": "Z26RNL4JYFTOTI",
+          "DNSName": "a3c22a2b065a64df888bad01f3cffa1a-c1fe9d883c1c6510.elb.us-east-1.amazonaws.com",
+          "EvaluateTargetHealth": true
+        }
+      }
+    }
+  ]
+}
