@@ -20,7 +20,7 @@ spec:
       serviceAccountName: library-service-account
       containers:
         - name: image-generator
-          image: ${ECR_REGISTRY}/image-generator:latest
+          image: 324547056370.dkr.ecr.us-east-1.amazonaws.com/image-generator:2c4bf9d69636a25ee25f5589b701ee671f3423a5
           ports:
             - containerPort: 8002
           env:
@@ -33,11 +33,11 @@ spec:
             - name: AWS_REGION
               value: "us-east-1"
             - name: KNOWLEDGE_BASE_BUCKET
-              value: "${KNOWLEDGE_BASE_BUCKET}"
+              value: "knowledge-base-test-6575574"
             - name: BEDROCK_FLOW_ID
-              value: "${BEDROCK_FLOW_ID}"
+              value: "E5J1KYPALJ"
             - name: BEDROCK_FLOW_ALIAS_ID
-              value: "${BEDROCK_FLOW_ALIAS_ID}"
+              value: "HZ5MQPO2A5"
           resources:
             requests:
               cpu: 100m
