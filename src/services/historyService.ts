@@ -3,9 +3,9 @@
  */
 
 import { query, queryOne, execute } from './database.js';
-import { buildPrompt } from './promptBuilder.js';
+import { buildPromptWithFlow } from './promptBuilder.js';
 import { generateImage } from './imageGenerator.js';
-import { uploadGeneratedHistoryImage, getS3Url } from './s3Service.js';
+import { uploadHistoryContent, getKnowledgeBaseS3Url, type SummaryContent } from './s3Service.js';
 import type { HistoryRow, ImageGenerationStatus } from '../types/history.js';
 
 /**
@@ -35,16 +35,20 @@ export async function getHistoryById(historyId: number): Promise<HistoryRow | nu
 }
 
 /**
- * History의 s3_key 업데이트
+ * History의 s3_key와 text_url 업데이트
  */
-export async function updateHistoryS3Key(historyId: number, s3Key: string): Promise<void> {
-  const sql = `UPDATE history SET s3_key = $1 WHERE id = $2`;
-  await execute(sql, [s3Key, historyId]);
-  console.log(`[HistoryService] Updated s3_key for history ${historyId}`);
+export async function updateHistoryS3Keys(
+  historyId: number,
+  s3Key: string,
+  textKey: string
+): Promise<void> {
+  const sql = `UPDATE history SET s3_key = $1, text_url = $2 WHERE id = $3`;
+  await execute(sql, [s3Key, textKey, historyId]);
+  console.log(`[HistoryService] Updated s3_key and text_url for history ${historyId}`);
 }
 
 /**
- * 단일 History에 대해 이미지 자동 생성
+ * 단일 History에 대해 이미지 자동 생성 (Flow 기반)
  */
 export async function generateImageForHistory(historyId: number): Promise<ImageGenerationStatus> {
   // 1. History 조회
@@ -68,6 +72,9 @@ export async function generateImageForHistory(historyId: number): Promise<ImageG
       hasImage: true,
       imageGenerated: false,
       s3Key: history.s3_key,
+      textKey: history.text_url || undefined,
+      imageUrl: getKnowledgeBaseS3Url(history.s3_key),
+      textUrl: history.text_url ? getKnowledgeBaseS3Url(history.text_url) : undefined,
     };
   }
 
@@ -83,9 +90,9 @@ export async function generateImageForHistory(historyId: number): Promise<ImageG
   }
 
   try {
-    // 4. 프롬프트 생성
-    console.log(`[HistoryService] Building prompt for history ${historyId}...`);
-    const { positivePrompt, negativePrompt } = buildPrompt(history.content);
+    // 4. Flow 기반 프롬프트 생성
+    console.log(`[HistoryService] Building prompt with Flow for history ${historyId}...`);
+    const { positivePrompt, negativePrompt } = await buildPromptWithFlow(history.content);
     console.log(`[HistoryService] Positive prompt: ${positivePrompt.substring(0, 100)}...`);
 
     // 5. 이미지 생성
@@ -102,19 +109,36 @@ export async function generateImageForHistory(historyId: number): Promise<ImageG
       };
     }
 
-    // 6. S3 업로드
-    console.log(`[HistoryService] Uploading image to S3 for history ${historyId}...`);
-    const s3Key = await uploadGeneratedHistoryImage(history.user_id, result.imageBase64);
+    // 6. 요약 텍스트 내용 구성
+    const recordDate = new Date(history.record_date);
+    const summaryContent: SummaryContent = {
+      summary: history.content,
+      tags: history.tags || [],
+      recordDate: history.record_date,
+      createdAt: new Date().toISOString(),
+    };
 
-    // 7. DB 업데이트
-    await updateHistoryS3Key(historyId, s3Key);
+    // 7. S3 업로드 (이미지 + 텍스트, 새 경로 구조)
+    console.log(`[HistoryService] Uploading content to S3 for history ${historyId}...`);
+    const s3Result = await uploadHistoryContent(
+      history.user_id,
+      recordDate,
+      result.imageBase64,
+      summaryContent
+    );
+
+    // 8. DB 업데이트
+    await updateHistoryS3Keys(historyId, s3Result.imageKey, s3Result.textKey);
 
     return {
       historyId,
       userId: history.user_id,
       hasImage: true,
       imageGenerated: true,
-      s3Key,
+      s3Key: s3Result.imageKey,
+      textKey: s3Result.textKey,
+      imageUrl: s3Result.imageUrl,
+      textUrl: s3Result.textUrl,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

@@ -22,10 +22,10 @@ npm install
 
 ```env
 # Database Configuration
-DB_HOST=fproject-dev-postgres.c9eksq6cmh3c.us-east-1.rds.amazonaws.com
+DB_HOST=your-rds-endpoint.region.rds.amazonaws.com
 DB_PORT=5432
-DB_NAME=fproject_db
-DB_USER=fproject_user
+DB_NAME=your_db_name
+DB_USER=your_db_user
 DB_PASSWORD=your_password
 
 # AWS Configuration
@@ -34,7 +34,7 @@ AWS_ACCESS_KEY_ID=your_access_key
 AWS_SECRET_ACCESS_KEY=your_secret_key
 
 # S3 Configuration
-S3_BUCKET=library-bucket-youkkk
+S3_BUCKET=your-s3-bucket
 
 # Bedrock Model
 BEDROCK_MODEL_ID=amazon.titan-image-generator-v2:0
@@ -92,7 +92,7 @@ npm run test all
     {
       "Effect": "Allow",
       "Action": ["s3:PutObject"],
-      "Resource": ["arn:aws:s3:::library-bucket-youkkk/*"]
+      "Resource": ["arn:aws:s3:::your-s3-bucket/*"]
     }
   ]
 }

@@ -16,7 +16,7 @@ import {
 } from './services/historyService.js';
 import { generateImage } from './services/imageGenerator.js';
 import { buildPrompt } from './services/promptBuilder.js';
-import { getS3Url } from './services/s3Service.js';
+import { getS3Url, getKnowledgeBaseS3Url } from './services/s3Service.js';
 
 const app = express();
 const PORT = process.env.PORT || 8002;
@@ -134,7 +134,9 @@ app.post('/api/v1/histories/:id/generate-image', async (req: Request, res: Respo
         imageGenerated: result.imageGenerated,
         alreadyHadImage: result.hasImage && !result.imageGenerated,
         s3Key: result.s3Key,
-        imageUrl: result.s3Key ? getS3Url(result.s3Key) : null,
+        textKey: result.textKey,
+        imageUrl: result.imageUrl || (result.s3Key ? getKnowledgeBaseS3Url(result.s3Key) : null),
+        textUrl: result.textUrl || (result.textKey ? getKnowledgeBaseS3Url(result.textKey) : null),
       }
     });
   } catch (error) {
@@ -175,7 +177,9 @@ app.post('/api/v1/histories/batch-generate', async (req: Request, res: Response)
         imageGenerated: r.imageGenerated,
         alreadyHadImage: r.hasImage && !r.imageGenerated,
         s3Key: r.s3Key,
-        imageUrl: r.s3Key ? getS3Url(r.s3Key) : null,
+        textKey: r.textKey,
+        imageUrl: r.imageUrl || (r.s3Key ? getKnowledgeBaseS3Url(r.s3Key) : null),
+        textUrl: r.textUrl || (r.textKey ? getKnowledgeBaseS3Url(r.textKey) : null),
         error: r.error,
       }))
     });

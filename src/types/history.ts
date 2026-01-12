@@ -41,5 +41,8 @@ export interface ImageGenerationStatus {
   hasImage: boolean;
   imageGenerated: boolean;
   s3Key?: string;
+  textKey?: string;
+  imageUrl?: string;
+  textUrl?: string;
   error?: string;
 }

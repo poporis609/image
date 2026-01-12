@@ -1,6 +1,7 @@
 # Image Generator API
 
 History 콘텐츠를 기반으로 AI 이미지를 자동 생성하는 API 서비스입니다.
+Bedrock Flow를 사용하여 한글 일기를 영어 이미지 프롬프트로 자동 변환합니다.
 
 ## Base URL
 
@@ -21,7 +22,7 @@ GET /health
 {
   "status": "ok",
   "service": "image-generator",
-  "timestamp": "2026-01-09T10:00:00.000Z"
+  "timestamp": "2026-01-12T10:00:00.000Z"
 }
 ```
 
@@ -50,7 +51,7 @@ GET /api/v1/histories/without-image?limit=10
       "id": 123,
       "userId": "cognito-sub-xxx",
       "content": "오늘 아침 강아지와 산책했다...",
-      "recordDate": "2026-01-09",
+      "recordDate": "2026-01-12",
       "tags": ["산책", "강아지"]
     }
   ]
@@ -78,17 +79,17 @@ GET /api/v1/histories/:id
     "id": 123,
     "userId": "cognito-sub-xxx",
     "content": "오늘 아침 강아지와 산책했다...",
-    "recordDate": "2026-01-09",
+    "recordDate": "2026-01-12",
     "tags": ["산책", "강아지"],
-    "s3Key": "cognito-sub-xxx/2026-01/generated_1736409600000.png",
-    "imageUrl": "https://library-bucket-youkkk.s3.us-east-1.amazonaws.com/..."
+    "s3Key": "cognito-sub-xxx/history/2026/01/12/image_1736409600000.png",
+    "imageUrl": "https://your-bucket.s3.us-east-1.amazonaws.com/..."
   }
 }
 ```
 
 ---
 
-### 3. 특정 History에 이미지 생성
+### 3. 특정 History에 이미지 생성 ⭐ 주요 API
 
 ```
 POST /api/v1/histories/:id/generate-image
@@ -99,7 +100,7 @@ POST /api/v1/histories/:id/generate-image
 |---------|------|------|------|
 | id | number | Y | History ID |
 
-**Response:**
+**Response (새로 생성된 경우):**
 ```json
 {
   "success": true,
@@ -108,15 +109,48 @@ POST /api/v1/histories/:id/generate-image
     "userId": "cognito-sub-xxx",
     "imageGenerated": true,
     "alreadyHadImage": false,
-    "s3Key": "cognito-sub-xxx/2026-01/generated_1736409600000.png",
-    "imageUrl": "https://library-bucket-youkkk.s3.us-east-1.amazonaws.com/..."
+    "s3Key": "cognito-sub-xxx/history/2026/01/12/image_1736409600000.png",
+    "textKey": "cognito-sub-xxx/history/2026/01/12/summary_1736409600000.txt",
+    "imageUrl": "https://your-bucket.s3.us-east-1.amazonaws.com/cognito-sub-xxx/history/2026/01/12/image_1736409600000.png",
+    "textUrl": "https://your-bucket.s3.us-east-1.amazonaws.com/cognito-sub-xxx/history/2026/01/12/summary_1736409600000.txt"
   }
 }
 ```
 
+**Response (이미 이미지가 있는 경우):**
+```json
+{
+  "success": true,
+  "data": {
+    "historyId": 123,
+    "userId": "cognito-sub-xxx",
+    "imageGenerated": false,
+    "alreadyHadImage": true,
+    "s3Key": "cognito-sub-xxx/history/2026/01/12/image_1736409600000.png",
+    "textKey": "cognito-sub-xxx/history/2026/01/12/summary_1736409600000.txt",
+    "imageUrl": "https://your-bucket.s3.us-east-1.amazonaws.com/...",
+    "textUrl": "https://your-bucket.s3.us-east-1.amazonaws.com/..."
+  }
+}
+```
+
+**Response Fields:**
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| historyId | number | History ID |
+| userId | string | Cognito Sub |
+| imageGenerated | boolean | 이번 요청에서 이미지가 생성되었는지 |
+| alreadyHadImage | boolean | 이미 이미지가 있었는지 |
+| s3Key | string | 이미지 S3 키 |
+| textKey | string | 요약 텍스트 S3 키 (신규) |
+| imageUrl | string | 이미지 전체 URL |
+| textUrl | string | 요약 텍스트 전체 URL (신규) |
+
 **Notes:**
-- 이미 이미지가 있는 경우 `imageGenerated: false`, `alreadyHadImage: true` 반환
-- 이미지 생성에는 약 5-10초 소요
+- 이미지 생성에는 약 10-30초 소요
+- Bedrock Flow가 한글 일기를 자동으로 영어 프롬프트로 변환
+- 이미지와 요약 텍스트가 함께 S3에 저장됨
+- S3 경로: `{cognito-sub}/history/{YYYY}/{MM}/{DD}/`
 
 ---
 
@@ -153,17 +187,15 @@ POST /api/v1/histories/batch-generate
       "userId": "cognito-sub-xxx",
       "imageGenerated": true,
       "alreadyHadImage": false,
-      "s3Key": "...",
-      "imageUrl": "...",
+      "s3Key": "cognito-sub-xxx/history/2026/01/12/image_xxx.png",
+      "textKey": "cognito-sub-xxx/history/2026/01/12/summary_xxx.txt",
+      "imageUrl": "https://your-bucket.s3.us-east-1.amazonaws.com/...",
+      "textUrl": "https://your-bucket.s3.us-east-1.amazonaws.com/...",
       "error": null
     }
   ]
 }
 ```
-
-**Notes:**
-- Rate limiting 방지를 위해 각 이미지 생성 사이에 1초 딜레이
-- 전체 처리 시간: limit × (5~10초 + 1초)
 
 ---
 
@@ -187,12 +219,6 @@ POST /api/v1/generate-image
   "negativePrompt": "low quality, blurry"
 }
 ```
-
-| 필드 | 타입 | 필수 | 설명 |
-|------|------|------|------|
-| text | string | 조건부 | 한글 텍스트 (자동 프롬프트 변환) |
-| positivePrompt | string | 조건부 | 직접 지정할 positive 프롬프트 |
-| negativePrompt | string | N | 직접 지정할 negative 프롬프트 |
 
 **Response:**
 ```json
@@ -238,15 +264,34 @@ POST /api/v1/build-prompt
 }
 ```
 
-**Notes:**
-- 이미지 생성 전 프롬프트 확인용
-- 실제 이미지 생성 비용 없음
+---
+
+## S3 저장 구조
+
+```
+your-s3-bucket/
+└── {cognito-sub}/
+    └── history/
+        └── {YYYY}/
+            └── {MM}/
+                └── {DD}/
+                    ├── image_{timestamp}.png    # AI 생성 이미지
+                    └── summary_{timestamp}.txt  # 요약 텍스트 (JSON)
+```
+
+**summary_{timestamp}.txt 형식:**
+```json
+{
+  "summary": "오늘 아침 강아지와 공원에서 산책했다...",
+  "tags": ["산책", "강아지"],
+  "recordDate": "2026-01-12",
+  "createdAt": "2026-01-12T10:30:00.000Z"
+}
+```
 
 ---
 
 ## Error Response
-
-모든 에러는 다음 형식으로 반환됩니다:
 
 ```json
 {
@@ -259,7 +304,7 @@ POST /api/v1/build-prompt
 | 코드 | 설명 |
 |------|------|
 | 200 | 성공 |
-| 400 | 잘못된 요청 (파라미터 오류) |
+| 400 | 잘못된 요청 |
 | 404 | 리소스 없음 |
 | 500 | 서버 에러 |
 
@@ -270,9 +315,10 @@ POST /api/v1/build-prompt
 | 변수 | 필수 | 설명 |
 |------|------|------|
 | PORT | N | 서버 포트 (기본값: 8002) |
-| DATABASE_URL | Y | PostgreSQL 연결 문자열 |
+| DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD | Y | PostgreSQL 연결 정보 |
 | AWS_REGION | N | AWS 리전 (기본값: us-east-1) |
-| AWS_ACCESS_KEY_ID | N | AWS 액세스 키 (IAM Role 사용시 불필요) |
-| AWS_SECRET_ACCESS_KEY | N | AWS 시크릿 키 (IAM Role 사용시 불필요) |
-| S3_BUCKET | N | S3 버킷명 (기본값: library-bucket-youkkk) |
-| BEDROCK_MODEL_ID | N | Bedrock 모델 ID (기본값: amazon.titan-image-generator-v2:0) |
+| S3_BUCKET | N | 기존 S3 버킷 |
+| KNOWLEDGE_BASE_BUCKET | N | 히스토리 저장 버킷 |
+| BEDROCK_MODEL_ID | N | Titan 모델 ID (기본값: amazon.titan-image-generator-v2:0) |
+| BEDROCK_FLOW_ID | Y | Bedrock Flow ID |
+| BEDROCK_FLOW_ALIAS_ID | Y | Bedrock Flow Alias ID |

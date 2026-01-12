@@ -9,44 +9,63 @@ const { Pool } = pg;
 
 let pool: pg.Pool | null = null;
 
-async function getDbPassword(): Promise<string> {
-  // 환경변수에 직접 설정된 경우
-  if (process.env.DB_PASSWORD) {
-    return process.env.DB_PASSWORD;
-  }
+interface DbConfig {
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string;
+}
 
-  // AWS Secrets Manager에서 가져오기
+async function getDbConfig(): Promise<DbConfig> {
+  // AWS Secrets Manager에서 전체 DB 설정 가져오기
   if (process.env.USE_SECRETS_MANAGER === 'true' && process.env.DB_SECRET_NAME) {
     const client = new SecretsManagerClient({ region: process.env.AWS_REGION || 'us-east-1' });
     const command = new GetSecretValueCommand({ SecretId: process.env.DB_SECRET_NAME });
     const response = await client.send(command);
     
     if (response.SecretString) {
-      // JSON 형식이면 파싱, 아니면 그대로 사용
       try {
         const secret = JSON.parse(response.SecretString);
-        console.log('[Database] Password loaded from Secrets Manager (JSON)');
-        return secret.password || secret;
+        console.log('[Database] Config loaded from Secrets Manager');
+        return {
+          host: secret.host || process.env.DB_HOST,
+          port: parseInt(secret.port || process.env.DB_PORT || '5432'),
+          database: secret.dbname || secret.database || process.env.DB_NAME,
+          user: secret.username || secret.user || process.env.DB_USER,
+          password: secret.password,
+        };
       } catch {
+        // JSON 파싱 실패 시 비밀번호만 사용
         console.log('[Database] Password loaded from Secrets Manager (plain text)');
-        return response.SecretString;
       }
     }
   }
 
-  throw new Error('DB_PASSWORD not configured');
+  // 환경변수에서 가져오기 (fallback)
+  if (!process.env.DB_HOST || !process.env.DB_PASSWORD) {
+    throw new Error('DB configuration not found');
+  }
+  
+  return {
+    host: process.env.DB_HOST,
+    port: parseInt(process.env.DB_PORT || '5432'),
+    database: process.env.DB_NAME || 'postgres',
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD,
+  };
 }
 
 export async function initPool(): Promise<pg.Pool> {
   if (!pool) {
-    const password = await getDbPassword();
+    const config = await getDbConfig();
     
     pool = new Pool({
-      host: process.env.DB_HOST,
-      port: parseInt(process.env.DB_PORT || '5432'),
-      database: process.env.DB_NAME,
-      user: process.env.DB_USER,
-      password,
+      host: config.host,
+      port: config.port,
+      database: config.database,
+      user: config.user,
+      password: config.password,
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,

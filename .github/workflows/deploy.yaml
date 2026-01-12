@@ -41,16 +41,29 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-      - name: Update k8s deployment image tag
+      - name: Update k8s deployment with secrets
         env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
+          KNOWLEDGE_BASE_BUCKET: ${{ secrets.KNOWLEDGE_BASE_BUCKET }}
+          BEDROCK_FLOW_ID: ${{ secrets.BEDROCK_FLOW_ID }}
+          BEDROCK_FLOW_ALIAS_ID: ${{ secrets.BEDROCK_FLOW_ALIAS_ID }}
+          ACM_CERTIFICATE_ARN: ${{ secrets.ACM_CERTIFICATE_ARN }}
         run: |
-          sed -i "s|image:.*|image: 324547056370.dkr.ecr.us-east-1.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG|" k8s/deployment.yaml
+          # Update deployment.yaml
+          sed -i "s|\${ECR_REGISTRY}|$ECR_REGISTRY|g" k8s/deployment.yaml
+          sed -i "s|image:.*|image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG|" k8s/deployment.yaml
+          sed -i "s|\${KNOWLEDGE_BASE_BUCKET}|$KNOWLEDGE_BASE_BUCKET|g" k8s/deployment.yaml
+          sed -i "s|\${BEDROCK_FLOW_ID}|$BEDROCK_FLOW_ID|g" k8s/deployment.yaml
+          sed -i "s|\${BEDROCK_FLOW_ALIAS_ID}|$BEDROCK_FLOW_ALIAS_ID|g" k8s/deployment.yaml
+          
+          # Update ingress.yaml
+          sed -i "s|\${ACM_CERTIFICATE_ARN}|$ACM_CERTIFICATE_ARN|g" k8s/ingress.yaml
 
       - name: Commit and push updated deployment
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add k8s/deployment.yaml
+          git add k8s/
           git diff --staged --quiet || git commit -m "[skip ci] Update image tag to ${{ github.sha }}"
           git push

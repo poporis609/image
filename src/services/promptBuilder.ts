@@ -2,6 +2,8 @@
  * PromptBuilder - Journal 텍스트를 이미지 생성 프롬프트로 변환
  */
 
+import { invokePromptFlow, isFlowConfigured } from './bedrockFlowService.js';
+
 export interface PromptResult {
   positivePrompt: string;
   negativePrompt: string;
@@ -109,9 +111,9 @@ function extractActivities(text: string): string[] {
 }
 
 /**
- * Journal 텍스트를 이미지 생성 프롬프트로 변환
+ * Journal 텍스트를 이미지 생성 프롬프트로 변환 (폴백용 - 기존 하드코딩 로직)
  */
-export function buildPrompt(journalText: string): PromptResult {
+export function buildPromptFallback(journalText: string): PromptResult {
   // 키워드 추출
   const keywords = extractKeywords(journalText);
   const activities = extractActivities(journalText);
@@ -152,9 +154,7 @@ export function buildPrompt(journalText: string): PromptResult {
   let positivePrompt = promptParts.join(', ');
   
   // 512자 제한
-  if (positivePrompt.length > 512) {
-    positivePrompt = positivePrompt.substring(0, 509) + '...';
-  }
+  positivePrompt = truncatePrompt(positivePrompt);
   
   return {
     positivePrompt,
@@ -163,8 +163,62 @@ export function buildPrompt(journalText: string): PromptResult {
 }
 
 /**
+ * Journal 텍스트를 이미지 생성 프롬프트로 변환 (하위 호환성 유지)
+ */
+export function buildPrompt(journalText: string): PromptResult {
+  return buildPromptFallback(journalText);
+}
+
+/**
  * 프롬프트 길이 검증
  */
 export function validatePromptLength(prompt: string): boolean {
-  return prompt.length <= 512;
+  return prompt.length <= 1000;
+}
+
+/**
+ * 프롬프트 1000자 제한 적용
+ */
+function truncatePrompt(prompt: string): string {
+  if (prompt.length > 1000) {
+    return prompt.substring(0, 997) + '...';
+  }
+  return prompt;
+}
+
+/**
+ * Flow 우선 호출하여 프롬프트 생성 (실패 시 폴백)
+ * @param journalText - 한글 일기 텍스트
+ * @param useFlow - Flow 사용 여부 (기본값: true)
+ * @returns PromptResult
+ */
+export async function buildPromptWithFlow(
+  journalText: string,
+  useFlow: boolean = true
+): Promise<PromptResult> {
+  // Flow 사용하지 않거나 설정되지 않은 경우 폴백
+  if (!useFlow || !isFlowConfigured()) {
+    console.log('[PromptBuilder] Using fallback logic (Flow disabled or not configured)');
+    return buildPromptFallback(journalText);
+  }
+
+  try {
+    console.log('[PromptBuilder] Invoking Bedrock Flow...');
+    const flowResult = await invokePromptFlow(journalText);
+
+    if (flowResult.success && flowResult.positivePrompt) {
+      console.log('[PromptBuilder] Flow succeeded, using Flow-generated prompt');
+      return {
+        positivePrompt: truncatePrompt(flowResult.positivePrompt),
+        negativePrompt: flowResult.negativePrompt || NEGATIVE_PROMPT,
+      };
+    }
+
+    // Flow 실패 시 폴백
+    console.log(`[PromptBuilder] Flow failed (${flowResult.error}), using fallback`);
+    return buildPromptFallback(journalText);
+  } catch (error) {
+    console.error('[PromptBuilder] Flow error, using fallback:', error);
+    return buildPromptFallback(journalText);
+  }
 }

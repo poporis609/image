@@ -2,7 +2,8 @@
 
 $ErrorActionPreference = "Stop"
 
-$AWS_ACCOUNT_ID = "324547056370"
+# AWS 계정 ID는 환경변수나 AWS CLI에서 가져오기
+$AWS_ACCOUNT_ID = aws sts get-caller-identity --query Account --output text
 $AWS_REGION = "us-east-1"
 $ECR_REPO = "image-generator"
 $IMAGE_TAG = git rev-parse --short HEAD

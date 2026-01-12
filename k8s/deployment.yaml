@@ -20,28 +20,24 @@ spec:
       serviceAccountName: library-service-account
       containers:
         - name: image-generator
-          image: 324547056370.dkr.ecr.us-east-1.amazonaws.com/image-generator:d4645c7d9ace887b10a22be045ae11971287d003
+          image: ${ECR_REGISTRY}/image-generator:latest
           ports:
             - containerPort: 8002
           env:
             - name: PORT
               value: "8002"
-            - name: DB_HOST
-              value: "fproject-dev-postgres.c9eksq6cmh3c.us-east-1.rds.amazonaws.com"
-            - name: DB_PORT
-              value: "5432"
-            - name: DB_NAME
-              value: "fproject_db"
-            - name: DB_USER
-              value: "fproject_user"
             - name: USE_SECRETS_MANAGER
               value: "true"
             - name: DB_SECRET_NAME
-              value: "library-api/db-password"
+              value: "journal-api/database"
             - name: AWS_REGION
               value: "us-east-1"
-            - name: S3_BUCKET
-              value: "library-bucket-youkkk"
+            - name: KNOWLEDGE_BASE_BUCKET
+              value: "${KNOWLEDGE_BASE_BUCKET}"
+            - name: BEDROCK_FLOW_ID
+              value: "${BEDROCK_FLOW_ID}"
+            - name: BEDROCK_FLOW_ALIAS_ID
+              value: "${BEDROCK_FLOW_ALIAS_ID}"
           resources:
             requests:
               cpu: 100m
