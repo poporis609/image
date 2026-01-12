@@ -16,7 +16,7 @@ import {
 } from './services/historyService.js';
 import { generateImage } from './services/imageGenerator.js';
 import { buildPrompt } from './services/promptBuilder.js';
-import { getS3Url, getKnowledgeBaseS3Url } from './services/s3Service.js';
+import { getKnowledgeBaseS3Url } from './services/s3Service.js';
 
 const app = express();
 const PORT = process.env.PORT || 8002;
@@ -94,7 +94,7 @@ app.get('/api/v1/histories/:id', async (req: Request, res: Response) => {
         recordDate: history.record_date,
         tags: history.tags,
         s3Key: history.s3_key,
-        imageUrl: history.s3_key ? getS3Url(history.s3_key) : null,
+        imageUrl: history.s3_key ? getKnowledgeBaseS3Url(history.s3_key) : null,
       }
     });
   } catch (error) {
