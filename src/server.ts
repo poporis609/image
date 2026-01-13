@@ -25,7 +25,7 @@ const PORT = process.env.PORT || 8002;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));  // base64 이미지 전송을 위해 크기 제한 증가
 
 // Request logging
 app.use((req: Request, _res: Response, next: NextFunction) => {
