@@ -20,7 +20,7 @@ spec:
       serviceAccountName: library-service-account
       containers:
         - name: image-generator
-          image: 324547056370.dkr.ecr.us-east-1.amazonaws.com/image-generator:26165d33d34e5ae655d14e3a8f27d54e6459e58e
+          image: 324547056370.dkr.ecr.us-east-1.amazonaws.com/image-generator:1c86dcd4f7e31932d96f3b0268bbabc9028aedcc
           ports:
             - containerPort: 8002
           env:
