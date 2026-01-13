@@ -23,7 +23,7 @@ const DEFAULT_CONFIG: ImageGenerationConfig = {
   width: 1024,
   height: 1280,  // 4:5 비율
   cfgScale: 6.5,
-  seed: 0, // 0 = random
+  seed: -1, // -1 = 매번 랜덤 시드 생성
   numberOfImages: 1,
 };
 
@@ -89,6 +89,11 @@ export async function generateImage(
     console.log('[ImageGenerator] Image size:', `${finalConfig.width}x${finalConfig.height}`);
     console.log('[ImageGenerator] Positive prompt:', positivePrompt.substring(0, 100) + '...');
 
+    // seed가 -1이면 랜덤 시드 생성 (0-2147483647 범위)
+    const actualSeed = finalConfig.seed < 0 
+      ? Math.floor(Math.random() * 2147483647) 
+      : finalConfig.seed;
+
     const requestBody = {
       taskType: 'TEXT_IMAGE',
       textToImageParams: {
@@ -97,12 +102,14 @@ export async function generateImage(
       },
       imageGenerationConfig: {
         cfgScale: finalConfig.cfgScale,
-        seed: finalConfig.seed,
+        seed: actualSeed,
         width: finalConfig.width,
         height: finalConfig.height,
         numberOfImages: finalConfig.numberOfImages,
       },
     };
+    
+    console.log('[ImageGenerator] Using seed:', actualSeed);
 
     const command = new InvokeModelCommand({
       modelId,
