@@ -110,7 +110,9 @@ async function generatePromptWithLLM(journalText: string): Promise<PromptResult 
       return null;
     }
 
-    console.log('[PromptBuilder] LLM generated prompt:', generatedPrompt.substring(0, 100) + '...');
+    console.log('[PromptBuilder] === LLM Generated Prompt ===');
+    console.log('[PromptBuilder] Full prompt:', generatedPrompt);
+    console.log('[PromptBuilder] =============================');
     
     return {
       positivePrompt: truncatePrompt(generatedPrompt),
@@ -118,6 +120,7 @@ async function generatePromptWithLLM(journalText: string): Promise<PromptResult 
     };
   } catch (error) {
     console.error('[PromptBuilder] LLM prompt generation failed:', error);
+    console.error('[PromptBuilder] Error details:', JSON.stringify(error, null, 2));
     return null;
   }
 }
