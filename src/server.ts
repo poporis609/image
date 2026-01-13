@@ -12,7 +12,9 @@ import {
   getHistoriesWithoutImage,
   getHistoryById,
   generateImageForHistory,
-  generateImagesForAllHistories
+  generateImagesForAllHistories,
+  previewImageForHistory,
+  confirmImageForHistory
 } from './services/historyService.js';
 import { generateImage } from './services/imageGenerator.js';
 import { buildPrompt } from './services/promptBuilder.js';
@@ -105,7 +107,7 @@ app.get('/api/v1/histories/:id', async (req: Request, res: Response) => {
 
 /**
  * POST /api/v1/histories/:id/generate-image
- * 특정 History에 대해 이미지 생성
+ * 특정 History에 대해 이미지 생성 (기존 - 바로 저장)
  */
 app.post('/api/v1/histories/:id/generate-image', async (req: Request, res: Response) => {
   try {
@@ -137,6 +139,94 @@ app.post('/api/v1/histories/:id/generate-image', async (req: Request, res: Respo
         textKey: result.textKey,
         imageUrl: result.imageUrl || (result.s3Key ? getKnowledgeBaseS3Url(result.s3Key) : null),
         textUrl: result.textUrl || (result.textKey ? getKnowledgeBaseS3Url(result.textKey) : null),
+      }
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+/**
+ * POST /api/v1/histories/:id/preview-image
+ * 이미지 미리보기 생성 (S3/DB 저장 안 함)
+ */
+app.post('/api/v1/histories/:id/preview-image', async (req: Request, res: Response) => {
+  try {
+    const historyId = parseInt(req.params.id);
+    if (isNaN(historyId)) {
+      res.status(400).json({ success: false, error: 'Invalid history ID' });
+      return;
+    }
+
+    console.log(`[API] Generating preview image for history ${historyId}...`);
+    const result = await previewImageForHistory(historyId);
+
+    if (!result.success) {
+      res.status(result.error === 'History not found' ? 404 : 500).json({
+        success: false,
+        error: result.error
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        historyId: result.historyId,
+        userId: result.userId,
+        imageBase64: result.imageBase64,
+        prompt: {
+          positive: result.positivePrompt,
+          negative: result.negativePrompt,
+        }
+      }
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+/**
+ * POST /api/v1/histories/:id/confirm-image
+ * 이미지 확정 저장 (S3 + DB)
+ */
+app.post('/api/v1/histories/:id/confirm-image', async (req: Request, res: Response) => {
+  try {
+    const historyId = parseInt(req.params.id);
+    const { imageBase64 } = req.body;
+
+    if (isNaN(historyId)) {
+      res.status(400).json({ success: false, error: 'Invalid history ID' });
+      return;
+    }
+
+    if (!imageBase64) {
+      res.status(400).json({ success: false, error: 'imageBase64 is required' });
+      return;
+    }
+
+    console.log(`[API] Confirming image for history ${historyId}...`);
+    const result = await confirmImageForHistory(historyId, imageBase64);
+
+    if (result.error) {
+      res.status(result.error === 'History not found' ? 404 : 500).json({
+        success: false,
+        error: result.error
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        historyId: result.historyId,
+        userId: result.userId,
+        s3Key: result.s3Key,
+        textKey: result.textKey,
+        imageUrl: result.imageUrl,
+        textUrl: result.textUrl,
       }
     });
   } catch (error) {

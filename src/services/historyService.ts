@@ -155,6 +155,155 @@ export async function generateImageForHistory(historyId: number): Promise<ImageG
 }
 
 /**
+ * 이미지 미리보기 결과
+ */
+export interface ImagePreviewResult {
+  historyId: number;
+  userId: string;
+  imageBase64: string;
+  positivePrompt: string;
+  negativePrompt: string;
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * 이미지 미리보기 생성 (S3/DB 저장 안 함)
+ */
+export async function previewImageForHistory(historyId: number): Promise<ImagePreviewResult> {
+  const history = await getHistoryById(historyId);
+  
+  if (!history) {
+    return {
+      historyId,
+      userId: '',
+      imageBase64: '',
+      positivePrompt: '',
+      negativePrompt: '',
+      success: false,
+      error: 'History not found',
+    };
+  }
+
+  if (!history.content || history.content.trim() === '') {
+    return {
+      historyId,
+      userId: history.user_id,
+      imageBase64: '',
+      positivePrompt: '',
+      negativePrompt: '',
+      success: false,
+      error: 'History content is empty',
+    };
+  }
+
+  try {
+    // Flow 기반 프롬프트 생성
+    console.log(`[HistoryService] Building preview prompt for history ${historyId}...`);
+    const { positivePrompt, negativePrompt } = await buildPromptWithFlow(history.content);
+
+    // 이미지 생성 (저장 안 함)
+    console.log(`[HistoryService] Generating preview image for history ${historyId}...`);
+    const result = await generateImage(positivePrompt, negativePrompt);
+
+    if (!result.success || !result.imageBase64) {
+      return {
+        historyId,
+        userId: history.user_id,
+        imageBase64: '',
+        positivePrompt,
+        negativePrompt,
+        success: false,
+        error: result.error || 'Image generation failed',
+      };
+    }
+
+    return {
+      historyId,
+      userId: history.user_id,
+      imageBase64: result.imageBase64,
+      positivePrompt,
+      negativePrompt,
+      success: true,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return {
+      historyId,
+      userId: history.user_id,
+      imageBase64: '',
+      positivePrompt: '',
+      negativePrompt: '',
+      success: false,
+      error: errorMessage,
+    };
+  }
+}
+
+/**
+ * 이미지 확정 저장 (S3 + DB)
+ */
+export async function confirmImageForHistory(
+  historyId: number,
+  imageBase64: string
+): Promise<ImageGenerationStatus> {
+  const history = await getHistoryById(historyId);
+  
+  if (!history) {
+    return {
+      historyId,
+      userId: '',
+      hasImage: false,
+      imageGenerated: false,
+      error: 'History not found',
+    };
+  }
+
+  try {
+    // 요약 텍스트 내용 구성
+    const recordDate = new Date(history.record_date);
+    const summaryContent: SummaryContent = {
+      summary: history.content || '',
+      tags: history.tags || [],
+      recordDate: history.record_date,
+      createdAt: new Date().toISOString(),
+    };
+
+    // S3 업로드
+    console.log(`[HistoryService] Confirming and uploading image for history ${historyId}...`);
+    const s3Result = await uploadHistoryContent(
+      history.user_id,
+      recordDate,
+      imageBase64,
+      summaryContent
+    );
+
+    // DB 업데이트
+    await updateHistoryS3Keys(historyId, s3Result.imageKey, s3Result.textKey);
+
+    return {
+      historyId,
+      userId: history.user_id,
+      hasImage: true,
+      imageGenerated: true,
+      s3Key: s3Result.imageKey,
+      textKey: s3Result.textKey,
+      imageUrl: s3Result.imageUrl,
+      textUrl: s3Result.textUrl,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return {
+      historyId,
+      userId: history.user_id,
+      hasImage: false,
+      imageGenerated: false,
+      error: errorMessage,
+    };
+  }
+}
+
+/**
  * 이미지가 없는 모든 History에 대해 이미지 생성 (배치)
  */
 export async function generateImagesForAllHistories(limit: number = 10): Promise<ImageGenerationStatus[]> {

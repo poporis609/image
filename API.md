@@ -89,7 +89,84 @@ GET /api/v1/histories/:id
 
 ---
 
-### 3. 특정 History에 이미지 생성 ⭐ 주요 API
+### 3. 이미지 미리보기 생성 (저장 안 함) ⭐ 신규
+
+```
+POST /api/v1/histories/:id/preview-image
+```
+
+이미지를 생성하지만 S3/DB에 저장하지 않습니다. 사용자가 이미지를 확인 후 확정할 수 있습니다.
+
+**Path Parameters:**
+| 파라미터 | 타입 | 필수 | 설명 |
+|---------|------|------|------|
+| id | number | Y | History ID |
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "historyId": 123,
+    "userId": "cognito-sub-xxx",
+    "imageBase64": "/9j/4AAQSkZJRgABAQAAAQABAAD...",
+    "prompt": {
+      "positive": "A realistic photo of walking with a dog...",
+      "negative": "anime, cartoon, low quality..."
+    }
+  }
+}
+```
+
+**Notes:**
+- 이미지 생성에 약 10-30초 소요
+- S3/DB에 저장되지 않음
+- 사용자가 이미지 확인 후 `/confirm-image`로 저장
+
+---
+
+### 4. 이미지 확정 저장 ⭐ 신규
+
+```
+POST /api/v1/histories/:id/confirm-image
+```
+
+미리보기에서 받은 이미지를 S3에 저장하고 DB를 업데이트합니다.
+
+**Path Parameters:**
+| 파라미터 | 타입 | 필수 | 설명 |
+|---------|------|------|------|
+| id | number | Y | History ID |
+
+**Request Body:**
+```json
+{
+  "imageBase64": "/9j/4AAQSkZJRgABAQAAAQABAAD..."
+}
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| imageBase64 | string | Y | 미리보기에서 받은 base64 이미지 |
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "historyId": 123,
+    "userId": "cognito-sub-xxx",
+    "s3Key": "cognito-sub-xxx/history/2026/01/12/image_1736409600000.png",
+    "textKey": "cognito-sub-xxx/history/2026/01/12/summary_1736409600000.txt",
+    "imageUrl": "https://your-bucket.s3.us-east-1.amazonaws.com/...",
+    "textUrl": "https://your-bucket.s3.us-east-1.amazonaws.com/..."
+  }
+}
+```
+
+---
+
+### 5. 특정 History에 이미지 생성 (바로 저장)
 
 ```
 POST /api/v1/histories/:id/generate-image
@@ -154,7 +231,7 @@ POST /api/v1/histories/:id/generate-image
 
 ---
 
-### 4. 배치 이미지 생성
+### 6. 배치 이미지 생성
 
 ```
 POST /api/v1/histories/batch-generate
@@ -199,7 +276,7 @@ POST /api/v1/histories/batch-generate
 
 ---
 
-### 5. 텍스트로 직접 이미지 생성
+### 7. 텍스트로 직접 이미지 생성
 
 ```
 POST /api/v1/generate-image
@@ -240,7 +317,7 @@ POST /api/v1/generate-image
 
 ---
 
-### 6. 프롬프트 미리보기
+### 8. 프롬프트 미리보기
 
 ```
 POST /api/v1/build-prompt
