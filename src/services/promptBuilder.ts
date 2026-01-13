@@ -31,6 +31,33 @@ const KEYWORD_MAP: Record<string, string> = {
   '밤': 'night',
   '새벽': 'dawn',
   
+  // 날씨 ⭐ 추가
+  '비': 'rainy weather, rain falling',
+  '비가 오': 'rainy day, rain falling from sky',
+  '비가 내': 'rain falling, rainy atmosphere',
+  '소나기': 'rain shower, sudden rain',
+  '장마': 'monsoon rain, heavy rain',
+  '폭우': 'heavy rain, downpour',
+  '눈': 'snowy weather, snow falling',
+  '눈이 오': 'snowy day, snowfall',
+  '눈이 내': 'snow falling, winter snow',
+  '흐림': 'cloudy sky, overcast',
+  '흐린': 'cloudy, overcast weather',
+  '구름': 'cloudy sky',
+  '맑음': 'clear sky, sunny',
+  '맑은': 'clear sunny day',
+  '햇살': 'sunshine, sunlight',
+  '햇빛': 'sunlight, sunny',
+  '더움': 'hot weather, summer heat',
+  '더운': 'hot day, warm weather',
+  '추움': 'cold weather, chilly',
+  '추운': 'cold day, winter cold',
+  '쌀쌀': 'chilly weather, cool air',
+  '바람': 'windy, wind blowing',
+  '안개': 'foggy, misty weather',
+  '무더위': 'humid hot weather, summer heat',
+  '서늘': 'cool weather, refreshing breeze',
+  
   // 활동
   '산책': 'walking',
   '운동': 'exercising',
@@ -76,11 +103,35 @@ const KEYWORD_MAP: Record<string, string> = {
   '즐거운': 'joyful',
   '기쁜': 'happy',
   '상쾌': 'refreshing',
+  '우울': 'melancholic mood',
+  '슬픔': 'sad atmosphere',
+  '지침': 'tired, exhausted',
+  '피곤': 'tired, fatigued',
   
   // 가족/사람
   '가족': 'family',
   '친구': 'friends',
   '동료': 'colleagues',
+};
+
+// 날씨 키워드 (우선순위 높게 처리)
+const WEATHER_KEYWORDS: Record<string, string> = {
+  '비가 오': 'rainy day with rain falling from the sky',
+  '비가 내': 'rain falling, wet atmosphere',
+  '비': 'rainy weather, raindrops',
+  '소나기': 'rain shower',
+  '장마': 'monsoon season, heavy rain',
+  '눈이 오': 'snowy day with snowflakes falling',
+  '눈이 내': 'snow falling gently',
+  '눈': 'snowy weather, snow covered',
+  '흐린': 'overcast cloudy sky',
+  '흐림': 'cloudy gray sky',
+  '맑은': 'clear blue sky, sunny',
+  '맑음': 'bright sunny day',
+  '더운': 'hot summer day',
+  '추운': 'cold winter day',
+  '바람': 'windy day, wind blowing',
+  '안개': 'foggy misty atmosphere',
 };
 
 /**
@@ -96,6 +147,21 @@ function extractKeywords(text: string): string[] {
   }
   
   return [...new Set(keywords)]; // 중복 제거
+}
+
+/**
+ * 날씨 키워드 추출 (우선순위 높음)
+ */
+function extractWeather(text: string): string | null {
+  // 긴 키워드부터 매칭 (예: "비가 오" > "비")
+  const sortedKeys = Object.keys(WEATHER_KEYWORDS).sort((a, b) => b.length - a.length);
+  
+  for (const korean of sortedKeys) {
+    if (text.includes(korean)) {
+      return WEATHER_KEYWORDS[korean];
+    }
+  }
+  return null;
 }
 
 /**
@@ -122,21 +188,27 @@ export function buildPromptFallback(journalText: string): PromptResult {
   // 키워드 추출
   const keywords = extractKeywords(journalText);
   const activities = extractActivities(journalText);
+  const weather = extractWeather(journalText);
   
   // 기본 스타일 디스크립터
   const styleDescriptors = [
     'realistic photo',
     'natural lighting',
     'high quality',
-    'warm and comforting mood',
     'authentic everyday life'
   ];
   
   // 프롬프트 구성
   let promptParts: string[] = [];
   
-  // 1. 주제/활동 (Subject)
-  if (activities.length > 0) {
+  // 1. 날씨가 있으면 최우선으로 반영
+  if (weather) {
+    if (activities.length > 0) {
+      promptParts.push(`A realistic documentary-style photo of ${activities.join(', ')} on a ${weather}`);
+    } else {
+      promptParts.push(`A realistic documentary-style photo of daily life scene with ${weather}`);
+    }
+  } else if (activities.length > 0) {
     promptParts.push(`A realistic documentary-style photo of ${activities.join(', ')}`);
   } else if (keywords.length > 0) {
     promptParts.push(`A realistic documentary-style photo representing daily life with ${keywords.slice(0, 5).join(', ')}`);
@@ -144,12 +216,10 @@ export function buildPromptFallback(journalText: string): PromptResult {
     promptParts.push('A realistic documentary-style photo of peaceful daily life');
   }
   
-  // 2. 추가 키워드
-  if (keywords.length > 0) {
-    const additionalKeywords = keywords.filter(k => !promptParts[0].includes(k)).slice(0, 5);
-    if (additionalKeywords.length > 0) {
-      promptParts.push(additionalKeywords.join(', '));
-    }
+  // 2. 추가 키워드 (날씨 제외)
+  const additionalKeywords = keywords.filter(k => !weather || !k.includes('rain') && !k.includes('snow') && !k.includes('cloud') && !k.includes('sunny')).slice(0, 5);
+  if (additionalKeywords.length > 0) {
+    promptParts.push(additionalKeywords.join(', '));
   }
   
   // 3. 스타일 디스크립터
