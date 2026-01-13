@@ -30,17 +30,8 @@ const DEFAULT_CONFIG: ImageGenerationConfig = {
 // Nova Canvas 모델 ID
 const NOVA_CANVAS_MODEL_ID = 'amazon.nova-canvas-v1:0';
 
-// 고정 Negative Prompt
-const NEGATIVE_PROMPT = `anime, cartoon, illustration, painting, sketch, drawing,
-3d render, cgi, unreal engine, fantasy, surreal,
-low quality, low resolution, blurry, out of focus, noise,
-overexposed, underexposed, jpeg artifacts,
-deformed body, distorted face, bad anatomy,
-extra fingers, missing fingers, fused fingers,
-extra limbs, missing limbs,
-dramatic lighting, cinematic effect, exaggerated emotion,
-overly posed, studio lighting,
-text, caption, subtitle, watermark, logo`;
+// 고정 Negative Prompt (Nova Canvas 최적화)
+const NEGATIVE_PROMPT = `anime, cartoon, illustration, painting, sketch, drawing, 3d render, cgi, unreal engine, fantasy, surreal, low quality, low resolution, blurry, out of focus, noise, overexposed, underexposed, jpeg artifacts, deformed body, distorted face, bad anatomy, extra fingers, missing fingers, fused fingers, extra limbs, missing limbs, dramatic lighting, cinematic effect, exaggerated emotion, overly posed, studio lighting, text, caption, subtitle, watermark, logo, wrong food, wrong animal, substituted items, inaccurate details`;
 
 let bedrockClient: BedrockRuntimeClient | null = null;
 
