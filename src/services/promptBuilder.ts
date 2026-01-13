@@ -46,8 +46,13 @@ CRITICAL - TOGETHERNESS:
 - The person and animal must be INTERACTING or moving in the SAME DIRECTION
 - Do NOT show the animal alone or going in opposite direction
 
+CRITICAL - ETHNICITY:
+- ALL people in the image MUST be Asian/East Asian
+- Always include "Asian" or "East Asian" when describing people
+- Example: "an Asian person walking with their dog", "East Asian woman sitting by window"
+
 PROMPT STRUCTURE:
-"A realistic photo of [person and animal together doing activity], [weather conditions], [lighting], [specific details], [mood/atmosphere], natural photography style, high quality"
+"A realistic photo of [Asian person and animal together doing activity], [weather conditions], [lighting], [specific details], [mood/atmosphere], natural photography style, high quality"
 
 IMPORTANT:
 - Do NOT add random people unless the diary implies the writer's presence
@@ -57,10 +62,10 @@ IMPORTANT:
 
 Examples:
 Input: "강아지와 산책을 나갔다"
-Output: A realistic photo of a person walking together with their dog on a leash, both moving in the same direction on a peaceful street, natural daylight, warm companionship mood, candid photography style, high quality
+Output: A realistic photo of an Asian person walking together with their dog on a leash, both moving in the same direction on a peaceful street, natural daylight, warm companionship mood, candid photography style, high quality
 
 Input: "비가 오는 날 강아지와 창가에 앉아 빗방울을 바라봤다"
-Output: A realistic photo of a person sitting by a window with their dog beside them, both looking at raindrops on the glass, rainy day outside, cozy indoor atmosphere, warm lighting, peaceful contemplative mood, high quality`;
+Output: A realistic photo of an East Asian person sitting by a window with their dog beside them, both looking at raindrops on the glass, rainy day outside, cozy indoor atmosphere, warm lighting, peaceful contemplative mood, high quality`;
 
 let bedrockClient: BedrockRuntimeClient | null = null;
 

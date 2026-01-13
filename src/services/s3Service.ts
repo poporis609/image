@@ -2,7 +2,7 @@
  * S3Service - 생성된 이미지를 S3에 업로드
  */
 
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 
 const KNOWLEDGE_BASE_BUCKET = process.env.KNOWLEDGE_BASE_BUCKET || 'your-knowledge-base-bucket';
 
@@ -131,4 +131,42 @@ export async function uploadHistoryContent(
     imageUrl: getKnowledgeBaseS3Url(imageKey),
     textUrl: getKnowledgeBaseS3Url(textKey),
   };
+}
+
+
+/**
+ * S3에서 파일 삭제
+ * @param s3Key - 삭제할 S3 키
+ */
+export async function deleteS3Object(s3Key: string): Promise<void> {
+  if (!s3Key) return;
+  
+  try {
+    const client = getS3Client();
+    await client.send(new DeleteObjectCommand({
+      Bucket: KNOWLEDGE_BASE_BUCKET,
+      Key: s3Key,
+    }));
+    console.log(`[S3Service] Deleted: ${s3Key}`);
+  } catch (error) {
+    console.error(`[S3Service] Failed to delete ${s3Key}:`, error);
+  }
+}
+
+/**
+ * 이전 히스토리 파일들 삭제 (이미지 + 텍스트)
+ * @param oldImageKey - 이전 이미지 S3 키
+ * @param oldTextKey - 이전 텍스트 S3 키
+ */
+export async function deleteOldHistoryFiles(oldImageKey?: string, oldTextKey?: string): Promise<void> {
+  const deletePromises: Promise<void>[] = [];
+  
+  if (oldImageKey) {
+    deletePromises.push(deleteS3Object(oldImageKey));
+  }
+  if (oldTextKey) {
+    deletePromises.push(deleteS3Object(oldTextKey));
+  }
+  
+  await Promise.all(deletePromises);
 }

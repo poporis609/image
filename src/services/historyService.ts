@@ -5,7 +5,7 @@
 import { query, queryOne, execute } from './database.js';
 import { buildPromptWithFlow } from './promptBuilder.js';
 import { generateImage } from './imageGenerator.js';
-import { uploadHistoryContent, getKnowledgeBaseS3Url, type SummaryContent } from './s3Service.js';
+import { uploadHistoryContent, getKnowledgeBaseS3Url, deleteOldHistoryFiles, type SummaryContent } from './s3Service.js';
 import type { HistoryRow, ImageGenerationStatus } from '../types/history.js';
 
 /**
@@ -268,6 +268,14 @@ export async function confirmImageForHistory(
       recordDate: history.record_date,
       createdAt: new Date().toISOString(),
     };
+
+    // 이전 파일이 있으면 삭제
+    const oldImageKey = history.s3_key;
+    const oldTextKey = history.text_url;
+    if (oldImageKey || oldTextKey) {
+      console.log(`[HistoryService] Deleting old files for history ${historyId}...`);
+      await deleteOldHistoryFiles(oldImageKey || undefined, oldTextKey || undefined);
+    }
 
     // S3 업로드
     console.log(`[HistoryService] Confirming and uploading image for history ${historyId}...`);
