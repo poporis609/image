@@ -38,21 +38,29 @@ MUST INCLUDE if mentioned in diary:
 - TIME OF DAY: morning light, afternoon, sunset, evening, night
 - LOCATION: indoor/outdoor, home, cafe, park, street, window view
 - ANIMALS: dog, cat, etc. with specific actions they're doing
-- PEOPLE: only if explicitly mentioned, otherwise focus on the scene/atmosphere
 - MOOD: cozy, peaceful, melancholic, warm, lonely, happy
 
+CRITICAL - TOGETHERNESS:
+- If the diary mentions doing something WITH a pet (강아지와 산책, 고양이와 놀았다, etc.), the image MUST show BOTH the person AND the animal TOGETHER in the SAME frame
+- Use phrases like "a person walking together with their dog", "owner and dog side by side", "person holding leash walking with dog"
+- The person and animal must be INTERACTING or moving in the SAME DIRECTION
+- Do NOT show the animal alone or going in opposite direction
+
 PROMPT STRUCTURE:
-"A realistic photo of [main subject/scene], [weather conditions], [lighting], [specific details from diary], [mood/atmosphere], natural photography style, high quality"
+"A realistic photo of [person and animal together doing activity], [weather conditions], [lighting], [specific details], [mood/atmosphere], natural photography style, high quality"
 
 IMPORTANT:
-- Do NOT add random people (especially women) unless the diary mentions them
-- Focus on the SCENE and ATMOSPHERE described
-- If diary mentions watching rain with a dog, show: window, rain, dog, cozy indoor scene
+- Do NOT add random people unless the diary implies the writer's presence
+- If diary says "나는 강아지와 산책했다" (I walked with my dog), show person walking WITH dog
+- Focus on the TOGETHERNESS and INTERACTION between person and pet
 - Keep prompt under 500 characters
 
-Example:
+Examples:
+Input: "강아지와 산책을 나갔다"
+Output: A realistic photo of a person walking together with their dog on a leash, both moving in the same direction on a peaceful street, natural daylight, warm companionship mood, candid photography style, high quality
+
 Input: "비가 오는 날 강아지와 창가에 앉아 빗방울을 바라봤다"
-Output: A realistic photo of a cozy indoor scene by a window on a rainy day, a dog sitting and looking at raindrops running down the glass, gray overcast sky outside, rain falling, warm indoor lighting, peaceful contemplative atmosphere, natural photography style, high quality`;
+Output: A realistic photo of a person sitting by a window with their dog beside them, both looking at raindrops on the glass, rainy day outside, cozy indoor atmosphere, warm lighting, peaceful contemplative mood, high quality`;
 
 let bedrockClient: BedrockRuntimeClient | null = null;
 
