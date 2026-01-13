@@ -5,7 +5,7 @@
 import { query, queryOne, execute } from './database.js';
 import { buildPromptWithFlow } from './promptBuilder.js';
 import { generateImage } from './imageGenerator.js';
-import { uploadHistoryContent, getKnowledgeBaseS3Url, deleteOldHistoryFiles, type SummaryContent } from './s3Service.js';
+import { uploadHistoryContent, getKnowledgeBaseS3Url, deleteOldHistoryFiles } from './s3Service.js';
 import type { HistoryRow, ImageGenerationStatus } from '../types/history.js';
 
 /**
@@ -35,16 +35,15 @@ export async function getHistoryById(historyId: number): Promise<HistoryRow | nu
 }
 
 /**
- * History의 s3_key와 text_url 업데이트
+ * History의 s3_key 업데이트
  */
 export async function updateHistoryS3Keys(
   historyId: number,
-  s3Key: string,
-  textKey: string
+  s3Key: string
 ): Promise<void> {
-  const sql = `UPDATE history SET s3_key = $1, text_url = $2 WHERE id = $3`;
-  await execute(sql, [s3Key, textKey, historyId]);
-  console.log(`[HistoryService] Updated s3_key and text_url for history ${historyId}`);
+  const sql = `UPDATE history SET s3_key = $1 WHERE id = $2`;
+  await execute(sql, [s3Key, historyId]);
+  console.log(`[HistoryService] Updated s3_key for history ${historyId}`);
 }
 
 /**
@@ -109,26 +108,17 @@ export async function generateImageForHistory(historyId: number): Promise<ImageG
       };
     }
 
-    // 6. 요약 텍스트 내용 구성
+    // 6. S3 업로드 (이미지만)
     const recordDate = new Date(history.record_date);
-    const summaryContent: SummaryContent = {
-      summary: history.content,
-      tags: history.tags || [],
-      recordDate: history.record_date,
-      createdAt: new Date().toISOString(),
-    };
-
-    // 7. S3 업로드 (이미지 + 텍스트, 새 경로 구조)
-    console.log(`[HistoryService] Uploading content to S3 for history ${historyId}...`);
+    console.log(`[HistoryService] Uploading image to S3 for history ${historyId}...`);
     const s3Result = await uploadHistoryContent(
       history.user_id,
       recordDate,
-      result.imageBase64,
-      summaryContent
+      result.imageBase64
     );
 
-    // 8. DB 업데이트
-    await updateHistoryS3Keys(historyId, s3Result.imageKey, s3Result.textKey);
+    // 7. DB 업데이트
+    await updateHistoryS3Keys(historyId, s3Result.imageKey);
 
     return {
       historyId,
@@ -136,9 +126,7 @@ export async function generateImageForHistory(historyId: number): Promise<ImageG
       hasImage: true,
       imageGenerated: true,
       s3Key: s3Result.imageKey,
-      textKey: s3Result.textKey,
       imageUrl: s3Result.imageUrl,
-      textUrl: s3Result.textUrl,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -260,34 +248,25 @@ export async function confirmImageForHistory(
   }
 
   try {
-    // 요약 텍스트 내용 구성
     const recordDate = new Date(history.record_date);
-    const summaryContent: SummaryContent = {
-      summary: history.content || '',
-      tags: history.tags || [],
-      recordDate: history.record_date,
-      createdAt: new Date().toISOString(),
-    };
 
-    // 이전 파일이 있으면 삭제
+    // 이전 이미지가 있으면 삭제
     const oldImageKey = history.s3_key;
-    const oldTextKey = history.text_url;
-    if (oldImageKey || oldTextKey) {
-      console.log(`[HistoryService] Deleting old files for history ${historyId}...`);
-      await deleteOldHistoryFiles(oldImageKey || undefined, oldTextKey || undefined);
+    if (oldImageKey) {
+      console.log(`[HistoryService] Deleting old image for history ${historyId}...`);
+      await deleteOldHistoryFiles(oldImageKey);
     }
 
-    // S3 업로드
+    // S3 업로드 (이미지만)
     console.log(`[HistoryService] Confirming and uploading image for history ${historyId}...`);
     const s3Result = await uploadHistoryContent(
       history.user_id,
       recordDate,
-      imageBase64,
-      summaryContent
+      imageBase64
     );
 
     // DB 업데이트
-    await updateHistoryS3Keys(historyId, s3Result.imageKey, s3Result.textKey);
+    await updateHistoryS3Keys(historyId, s3Result.imageKey);
 
     return {
       historyId,
@@ -295,9 +274,7 @@ export async function confirmImageForHistory(
       hasImage: true,
       imageGenerated: true,
       s3Key: s3Result.imageKey,
-      textKey: s3Result.textKey,
       imageUrl: s3Result.imageUrl,
-      textUrl: s3Result.textUrl,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

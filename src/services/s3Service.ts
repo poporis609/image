@@ -11,19 +11,7 @@ const KNOWLEDGE_BASE_BUCKET = process.env.KNOWLEDGE_BASE_BUCKET || 'your-knowled
  */
 export interface HistoryS3Result {
   imageKey: string;
-  textKey: string;
   imageUrl: string;
-  textUrl: string;
-}
-
-/**
- * 요약 텍스트 파일 내용
- */
-export interface SummaryContent {
-  summary: string;
-  tags: string[];
-  recordDate: string;
-  createdAt: string;
 }
 
 let s3Client: S3Client | null = null;
@@ -74,26 +62,16 @@ export function buildImageFileName(timestamp: number): string {
 }
 
 /**
- * 텍스트 파일명 생성
- * 형식: summary_{timestamp}.txt
- */
-export function buildTextFileName(timestamp: number): string {
-  return `summary_${timestamp}.txt`;
-}
-
-/**
- * 히스토리 이미지와 텍스트를 새 경로 구조로 업로드
+ * 히스토리 이미지를 S3에 업로드 (이미지만)
  * @param cognitoSub - 사용자 Cognito Sub
  * @param recordDate - 히스토리 기록 날짜
  * @param imageBase64 - base64 인코딩된 이미지
- * @param summaryContent - 요약 텍스트 내용
  * @returns HistoryS3Result
  */
 export async function uploadHistoryContent(
   cognitoSub: string,
   recordDate: Date,
-  imageBase64: string,
-  summaryContent: SummaryContent
+  imageBase64: string
 ): Promise<HistoryS3Result> {
   const client = getS3Client();
   const timestamp = Date.now();
@@ -111,25 +89,11 @@ export async function uploadHistoryContent(
     ContentType: 'image/png',
   }));
   
-  // 텍스트 파일 업로드 (UTF-8 JSON)
-  const textFileName = buildTextFileName(timestamp);
-  const textKey = `${basePath}${textFileName}`;
-  const textContent = JSON.stringify(summaryContent, null, 2);
-  
-  await client.send(new PutObjectCommand({
-    Bucket: KNOWLEDGE_BASE_BUCKET,
-    Key: textKey,
-    Body: Buffer.from(textContent, 'utf-8'),
-    ContentType: 'application/json; charset=utf-8',
-  }));
-  
-  console.log(`[S3Service] History content uploaded: ${imageKey}, ${textKey}`);
+  console.log(`[S3Service] Image uploaded: ${imageKey}`);
   
   return {
     imageKey,
-    textKey,
     imageUrl: getKnowledgeBaseS3Url(imageKey),
-    textUrl: getKnowledgeBaseS3Url(textKey),
   };
 }
 
@@ -154,19 +118,11 @@ export async function deleteS3Object(s3Key: string): Promise<void> {
 }
 
 /**
- * 이전 히스토리 파일들 삭제 (이미지 + 텍스트)
+ * 이전 히스토리 이미지 삭제
  * @param oldImageKey - 이전 이미지 S3 키
- * @param oldTextKey - 이전 텍스트 S3 키
  */
-export async function deleteOldHistoryFiles(oldImageKey?: string, oldTextKey?: string): Promise<void> {
-  const deletePromises: Promise<void>[] = [];
-  
+export async function deleteOldHistoryFiles(oldImageKey?: string): Promise<void> {
   if (oldImageKey) {
-    deletePromises.push(deleteS3Object(oldImageKey));
+    await deleteS3Object(oldImageKey);
   }
-  if (oldTextKey) {
-    deletePromises.push(deleteS3Object(oldTextKey));
-  }
-  
-  await Promise.all(deletePromises);
 }
