@@ -10,12 +10,17 @@ export interface PromptResult {
 }
 
 // 고정 Negative Prompt
-const NEGATIVE_PROMPT = `low quality, blurry, pixelated, noisy, out of focus,
-distorted face, deformed body, extra fingers, missing fingers, extra limbs, unnatural pose,
-deformed dog, extra legs, distorted animal, unrealistic proportions,
-uncanny, artificial looking, plastic skin, waxy skin,
-cartoon, anime, illustration, 3d render, CGI,
-text, caption, watermark, logo, signature`;
+const NEGATIVE_PROMPT = `anime, cartoon, illustration, painting, sketch, drawing,
+3d render, cgi, unreal engine, fantasy, surreal,
+low quality, low resolution, blurry, out of focus, noise,
+overexposed, underexposed, jpeg artifacts,
+deformed body, distorted face, bad anatomy,
+extra fingers, missing fingers, fused fingers,
+extra limbs, missing limbs,
+dramatic lighting, cinematic effect, exaggerated emotion,
+overly posed, studio lighting,
+text, caption, subtitle, watermark, logo, anime, illustration, 3d render, cinematic, dramatic lighting, text, watermark
+`;
 
 // 한글 → 영어 키워드 매핑 (일상 활동)
 const KEYWORD_MAP: Record<string, string> = {
@@ -173,15 +178,15 @@ export function buildPrompt(journalText: string): PromptResult {
  * 프롬프트 길이 검증
  */
 export function validatePromptLength(prompt: string): boolean {
-  return prompt.length <= 1000;
+  return prompt.length <= 1024;
 }
 
 /**
- * 프롬프트 1000자 제한 적용
+ * 프롬프트 1024자 제한 적용
  */
 function truncatePrompt(prompt: string): string {
-  if (prompt.length > 1000) {
-    return prompt.substring(0, 997) + '...';
+  if (prompt.length > 1024) {
+    return prompt.substring(0, 1021) + '...';
   }
   return prompt;
 }

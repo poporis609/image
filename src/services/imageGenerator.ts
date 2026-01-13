@@ -1,5 +1,5 @@
 /**
- * ImageGenerator - Bedrock Titan Image Generator G1 V2 호출
+ * ImageGenerator - Amazon Nova Canvas 이미지 생성
  */
 
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
@@ -18,13 +18,29 @@ export interface ImageGenerationConfig {
   numberOfImages: number;
 }
 
+// Nova Canvas 기본 설정 (4:5 비율)
 const DEFAULT_CONFIG: ImageGenerationConfig = {
   width: 1024,
-  height: 1024,
-  cfgScale: 8,
+  height: 1280,  // 4:5 비율
+  cfgScale: 6.5,
   seed: 0, // 0 = random
   numberOfImages: 1,
 };
+
+// Nova Canvas 모델 ID
+const NOVA_CANVAS_MODEL_ID = 'amazon.nova-canvas-v1:0';
+
+// 고정 Negative Prompt
+const NEGATIVE_PROMPT = `anime, cartoon, illustration, painting, sketch, drawing,
+3d render, cgi, unreal engine, fantasy, surreal,
+low quality, low resolution, blurry, out of focus, noise,
+overexposed, underexposed, jpeg artifacts,
+deformed body, distorted face, bad anatomy,
+extra fingers, missing fingers, fused fingers,
+extra limbs, missing limbs,
+dramatic lighting, cinematic effect, exaggerated emotion,
+overly posed, studio lighting,
+text, caption, subtitle, watermark, logo`;
 
 let bedrockClient: BedrockRuntimeClient | null = null;
 
@@ -44,25 +60,49 @@ function getBedrockClient(): BedrockRuntimeClient {
 }
 
 /**
- * Bedrock Titan Image Generator를 호출하여 이미지 생성
+ * 현재 사용 중인 모델 ID 반환
+ */
+export function getModelId(): string {
+  return process.env.BEDROCK_MODEL_ID || NOVA_CANVAS_MODEL_ID;
+}
+
+/**
+ * 기본 이미지 설정 반환
+ */
+export function getDefaultConfig(): ImageGenerationConfig {
+  return { ...DEFAULT_CONFIG };
+}
+
+/**
+ * 고정 Negative Prompt 반환
+ */
+export function getNegativePrompt(): string {
+  return NEGATIVE_PROMPT;
+}
+
+/**
+ * Amazon Nova Canvas를 호출하여 이미지 생성
  */
 export async function generateImage(
   positivePrompt: string,
-  negativePrompt: string,
+  negativePrompt?: string,
   config: Partial<ImageGenerationConfig> = {}
 ): Promise<ImageGenerationResult> {
   const finalConfig = { ...DEFAULT_CONFIG, ...config };
-  const modelId = process.env.BEDROCK_MODEL_ID || 'amazon.titan-image-generator-v2:0';
+  const modelId = getModelId();
+  const finalNegativePrompt = negativePrompt || NEGATIVE_PROMPT;
 
   try {
-    console.log('[ImageGenerator] Generating image...');
+    console.log('[ImageGenerator] Generating image with Nova Canvas...');
+    console.log('[ImageGenerator] Model ID:', modelId);
+    console.log('[ImageGenerator] Image size:', `${finalConfig.width}x${finalConfig.height}`);
     console.log('[ImageGenerator] Positive prompt:', positivePrompt.substring(0, 100) + '...');
 
     const requestBody = {
       taskType: 'TEXT_IMAGE',
       textToImageParams: {
         text: positivePrompt,
-        negativeText: negativePrompt,
+        negativeText: finalNegativePrompt,
       },
       imageGenerationConfig: {
         cfgScale: finalConfig.cfgScale,
@@ -91,11 +131,11 @@ export async function generateImage(
     const responseBody = JSON.parse(new TextDecoder().decode(response.body));
     
     if (!responseBody.images || responseBody.images.length === 0) {
-      throw new Error('No images returned from Bedrock');
+      throw new Error('No images returned from Nova Canvas');
     }
 
     const imageBase64 = responseBody.images[0];
-    console.log('[ImageGenerator] Image generated successfully');
+    console.log('[ImageGenerator] Image generated successfully with Nova Canvas');
 
     return {
       success: true,
