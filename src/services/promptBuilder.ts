@@ -66,7 +66,7 @@ function getBedrockClient(): BedrockRuntimeClient {
  * LLM(Claude)을 사용하여 한글 일기를 영어 이미지 프롬프트로 변환
  */
 async function generatePromptWithLLM(journalText: string): Promise<PromptResult | null> {
-  const modelId = process.env.BEDROCK_LLM_MODEL_ID || 'anthropic.claude-3-haiku-20240307-v1:0';
+  const modelId = process.env.BEDROCK_LLM_MODEL_ID || 'anthropic.claude-sonnet-4-20250514-v1:0';
   
   try {
     console.log('[PromptBuilder] Generating prompt with LLM...');
