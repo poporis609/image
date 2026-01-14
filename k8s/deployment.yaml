@@ -22,10 +22,10 @@ spec:
         - name: image-generator
           image: 324547056370.dkr.ecr.us-east-1.amazonaws.com/image-generator:7276cef1c721e844142a7c99a98fb7b5e4bfa66a
           ports:
-            - containerPort: 8002
+            - containerPort: 3000
           env:
             - name: PORT
-              value: "8002"
+              value: "3000"
             - name: USE_SECRETS_MANAGER
               value: "true"
             - name: DB_SECRET_NAME
@@ -48,12 +48,12 @@ spec:
           livenessProbe:
             httpGet:
               path: /health
-              port: 8002
+              port: 3000
             initialDelaySeconds: 30
             periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /health
-              port: 8002
+              port: 3000
             initialDelaySeconds: 5
             periodSeconds: 5

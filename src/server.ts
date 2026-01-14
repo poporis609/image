@@ -21,7 +21,7 @@ import { buildPrompt } from './services/promptBuilder.js';
 import { getKnowledgeBaseS3Url } from './services/s3Service.js';
 
 const app = express();
-const PORT = process.env.PORT || 8002;
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
