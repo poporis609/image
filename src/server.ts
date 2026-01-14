@@ -26,7 +26,7 @@ const BASE_PATH = process.env.BASE_PATH || '/image';
 
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));  // base64 이미지 전송을 위해 크기 제한 증가
+app.use(express.json({ limit: '50mb' }));
 
 // Request logging
 app.use((req: Request, _res: Response, next: NextFunction) => {
@@ -34,25 +34,19 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
   next();
 });
 
-// Health check (ALB용 - prefix 없이)
+// Health check
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'image-generator', timestamp: new Date().toISOString() });
 });
 
-// Health check (prefix 포함)
 app.get(`${BASE_PATH}/health`, (_req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'image-generator', timestamp: new Date().toISOString() });
 });
 
-app.get(`${BASE_PATH}/api/v1/health`, (_req: Request, res: Response) => {
-  res.json({ status: 'ok', service: 'image-generator', timestamp: new Date().toISOString() });
-});
-
 /**
- * GET /image/api/v1/histories/without-image
- * 이미지가 없는 History 목록 조회
+ * GET /image/histories/without-image
  */
-app.get(`${BASE_PATH}/api/v1/histories/without-image`, async (req: Request, res: Response) => {
+app.get(`${BASE_PATH}/histories/without-image`, async (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 10;
     const histories = await getHistoriesWithoutImage(limit);
@@ -74,12 +68,10 @@ app.get(`${BASE_PATH}/api/v1/histories/without-image`, async (req: Request, res:
   }
 });
 
-
 /**
- * GET /image/api/v1/histories/:id
- * 특정 History 조회
+ * GET /image/histories/:id
  */
-app.get(`${BASE_PATH}/api/v1/histories/:id`, async (req: Request, res: Response) => {
+app.get(`${BASE_PATH}/histories/:id`, async (req: Request, res: Response) => {
   try {
     const historyId = parseInt(req.params.id);
     if (isNaN(historyId)) {
@@ -112,10 +104,9 @@ app.get(`${BASE_PATH}/api/v1/histories/:id`, async (req: Request, res: Response)
 });
 
 /**
- * POST /image/api/v1/histories/:id/generate-image
- * 특정 History에 대해 이미지 생성 (기존 - 바로 저장)
+ * POST /image/histories/:id/generate-image
  */
-app.post(`${BASE_PATH}/api/v1/histories/:id/generate-image`, async (req: Request, res: Response) => {
+app.post(`${BASE_PATH}/histories/:id/generate-image`, async (req: Request, res: Response) => {
   try {
     const historyId = parseInt(req.params.id);
     if (isNaN(historyId)) {
@@ -142,9 +133,7 @@ app.post(`${BASE_PATH}/api/v1/histories/:id/generate-image`, async (req: Request
         imageGenerated: result.imageGenerated,
         alreadyHadImage: result.hasImage && !result.imageGenerated,
         s3Key: result.s3Key,
-        textKey: result.textKey,
         imageUrl: result.imageUrl || (result.s3Key ? getKnowledgeBaseS3Url(result.s3Key) : null),
-        textUrl: result.textUrl || (result.textKey ? getKnowledgeBaseS3Url(result.textKey) : null),
       }
     });
   } catch (error) {
@@ -154,10 +143,9 @@ app.post(`${BASE_PATH}/api/v1/histories/:id/generate-image`, async (req: Request
 });
 
 /**
- * POST /image/api/v1/histories/:id/preview-image
- * 이미지 미리보기 생성 (S3/DB 저장 안 함)
+ * POST /image/histories/:id/preview-image
  */
-app.post(`${BASE_PATH}/api/v1/histories/:id/preview-image`, async (req: Request, res: Response) => {
+app.post(`${BASE_PATH}/histories/:id/preview-image`, async (req: Request, res: Response) => {
   try {
     const historyId = parseInt(req.params.id);
     if (isNaN(historyId)) {
@@ -195,10 +183,9 @@ app.post(`${BASE_PATH}/api/v1/histories/:id/preview-image`, async (req: Request,
 });
 
 /**
- * POST /image/api/v1/histories/:id/confirm-image
- * 이미지 확정 저장 (S3 + DB)
+ * POST /image/histories/:id/confirm-image
  */
-app.post(`${BASE_PATH}/api/v1/histories/:id/confirm-image`, async (req: Request, res: Response) => {
+app.post(`${BASE_PATH}/histories/:id/confirm-image`, async (req: Request, res: Response) => {
   try {
     const historyId = parseInt(req.params.id);
     const { imageBase64 } = req.body;
@@ -230,9 +217,7 @@ app.post(`${BASE_PATH}/api/v1/histories/:id/confirm-image`, async (req: Request,
         historyId: result.historyId,
         userId: result.userId,
         s3Key: result.s3Key,
-        textKey: result.textKey,
         imageUrl: result.imageUrl,
-        textUrl: result.textUrl,
       }
     });
   } catch (error) {
@@ -241,12 +226,10 @@ app.post(`${BASE_PATH}/api/v1/histories/:id/confirm-image`, async (req: Request,
   }
 });
 
-
 /**
- * POST /image/api/v1/histories/batch-generate
- * 배치로 여러 History에 이미지 생성
+ * POST /image/histories/batch-generate
  */
-app.post(`${BASE_PATH}/api/v1/histories/batch-generate`, async (req: Request, res: Response) => {
+app.post(`${BASE_PATH}/histories/batch-generate`, async (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.body.limit as string) || 5;
     if (limit > 20) {
@@ -273,9 +256,7 @@ app.post(`${BASE_PATH}/api/v1/histories/batch-generate`, async (req: Request, re
         imageGenerated: r.imageGenerated,
         alreadyHadImage: r.hasImage && !r.imageGenerated,
         s3Key: r.s3Key,
-        textKey: r.textKey,
         imageUrl: r.imageUrl || (r.s3Key ? getKnowledgeBaseS3Url(r.s3Key) : null),
-        textUrl: r.textUrl || (r.textKey ? getKnowledgeBaseS3Url(r.textKey) : null),
         error: r.error,
       }))
     });
@@ -286,10 +267,9 @@ app.post(`${BASE_PATH}/api/v1/histories/batch-generate`, async (req: Request, re
 });
 
 /**
- * POST /image/api/v1/generate-image
- * 텍스트로 직접 이미지 생성 (History 없이)
+ * POST /image/generate
  */
-app.post(`${BASE_PATH}/api/v1/generate-image`, async (req: Request, res: Response) => {
+app.post(`${BASE_PATH}/generate`, async (req: Request, res: Response) => {
   try {
     const { text, positivePrompt, negativePrompt } = req.body;
 
@@ -334,12 +314,10 @@ app.post(`${BASE_PATH}/api/v1/generate-image`, async (req: Request, res: Respons
   }
 });
 
-
 /**
- * POST /image/api/v1/build-prompt
- * 텍스트를 이미지 생성 프롬프트로 변환 (미리보기용)
+ * POST /image/build-prompt
  */
-app.post(`${BASE_PATH}/api/v1/build-prompt`, (req: Request, res: Response) => {
+app.post(`${BASE_PATH}/build-prompt`, (req: Request, res: Response) => {
   try {
     const { text } = req.body;
 
@@ -398,8 +376,8 @@ async function start() {
       console.log('🚀 Image Generator API Server');
       console.log('='.repeat(60));
       console.log(`📡 Server running on port ${PORT}`);
-      console.log(`📖 Health check: http://localhost:${PORT}/health`);
-      console.log(`🎨 API Base: http://localhost:${PORT}/api/v1`);
+      console.log(`📖 Health check: http://localhost:${PORT}${BASE_PATH}/health`);
+      console.log(`🎨 API Base: http://localhost:${PORT}${BASE_PATH}`);
       console.log('='.repeat(60));
     });
   } catch (error) {
