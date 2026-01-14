@@ -6,11 +6,10 @@ metadata:
   labels:
     app: image-generator
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: image-generator
   ports:
     - port: 8002
       targetPort: 8002
-      nodePort: 32002
       protocol: TCP
