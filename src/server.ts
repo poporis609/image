@@ -22,6 +22,7 @@ import { getKnowledgeBaseS3Url } from './services/s3Service.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const BASE_PATH = process.env.BASE_PATH || '/image';
 
 // Middleware
 app.use(cors());
@@ -33,20 +34,25 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
   next();
 });
 
-// Health check
+// Health check (ALB용 - prefix 없이)
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'image-generator', timestamp: new Date().toISOString() });
 });
 
-app.get('/api/v1/health', (_req: Request, res: Response) => {
+// Health check (prefix 포함)
+app.get(`${BASE_PATH}/health`, (_req: Request, res: Response) => {
+  res.json({ status: 'ok', service: 'image-generator', timestamp: new Date().toISOString() });
+});
+
+app.get(`${BASE_PATH}/api/v1/health`, (_req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'image-generator', timestamp: new Date().toISOString() });
 });
 
 /**
- * GET /api/v1/histories/without-image
+ * GET /image/api/v1/histories/without-image
  * 이미지가 없는 History 목록 조회
  */
-app.get('/api/v1/histories/without-image', async (req: Request, res: Response) => {
+app.get(`${BASE_PATH}/api/v1/histories/without-image`, async (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 10;
     const histories = await getHistoriesWithoutImage(limit);
@@ -70,10 +76,10 @@ app.get('/api/v1/histories/without-image', async (req: Request, res: Response) =
 
 
 /**
- * GET /api/v1/histories/:id
+ * GET /image/api/v1/histories/:id
  * 특정 History 조회
  */
-app.get('/api/v1/histories/:id', async (req: Request, res: Response) => {
+app.get(`${BASE_PATH}/api/v1/histories/:id`, async (req: Request, res: Response) => {
   try {
     const historyId = parseInt(req.params.id);
     if (isNaN(historyId)) {
@@ -106,10 +112,10 @@ app.get('/api/v1/histories/:id', async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/v1/histories/:id/generate-image
+ * POST /image/api/v1/histories/:id/generate-image
  * 특정 History에 대해 이미지 생성 (기존 - 바로 저장)
  */
-app.post('/api/v1/histories/:id/generate-image', async (req: Request, res: Response) => {
+app.post(`${BASE_PATH}/api/v1/histories/:id/generate-image`, async (req: Request, res: Response) => {
   try {
     const historyId = parseInt(req.params.id);
     if (isNaN(historyId)) {
@@ -148,10 +154,10 @@ app.post('/api/v1/histories/:id/generate-image', async (req: Request, res: Respo
 });
 
 /**
- * POST /api/v1/histories/:id/preview-image
+ * POST /image/api/v1/histories/:id/preview-image
  * 이미지 미리보기 생성 (S3/DB 저장 안 함)
  */
-app.post('/api/v1/histories/:id/preview-image', async (req: Request, res: Response) => {
+app.post(`${BASE_PATH}/api/v1/histories/:id/preview-image`, async (req: Request, res: Response) => {
   try {
     const historyId = parseInt(req.params.id);
     if (isNaN(historyId)) {
@@ -189,10 +195,10 @@ app.post('/api/v1/histories/:id/preview-image', async (req: Request, res: Respon
 });
 
 /**
- * POST /api/v1/histories/:id/confirm-image
+ * POST /image/api/v1/histories/:id/confirm-image
  * 이미지 확정 저장 (S3 + DB)
  */
-app.post('/api/v1/histories/:id/confirm-image', async (req: Request, res: Response) => {
+app.post(`${BASE_PATH}/api/v1/histories/:id/confirm-image`, async (req: Request, res: Response) => {
   try {
     const historyId = parseInt(req.params.id);
     const { imageBase64 } = req.body;
@@ -237,10 +243,10 @@ app.post('/api/v1/histories/:id/confirm-image', async (req: Request, res: Respon
 
 
 /**
- * POST /api/v1/histories/batch-generate
+ * POST /image/api/v1/histories/batch-generate
  * 배치로 여러 History에 이미지 생성
  */
-app.post('/api/v1/histories/batch-generate', async (req: Request, res: Response) => {
+app.post(`${BASE_PATH}/api/v1/histories/batch-generate`, async (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.body.limit as string) || 5;
     if (limit > 20) {
@@ -280,10 +286,10 @@ app.post('/api/v1/histories/batch-generate', async (req: Request, res: Response)
 });
 
 /**
- * POST /api/v1/generate-image
+ * POST /image/api/v1/generate-image
  * 텍스트로 직접 이미지 생성 (History 없이)
  */
-app.post('/api/v1/generate-image', async (req: Request, res: Response) => {
+app.post(`${BASE_PATH}/api/v1/generate-image`, async (req: Request, res: Response) => {
   try {
     const { text, positivePrompt, negativePrompt } = req.body;
 
@@ -330,10 +336,10 @@ app.post('/api/v1/generate-image', async (req: Request, res: Response) => {
 
 
 /**
- * POST /api/v1/build-prompt
+ * POST /image/api/v1/build-prompt
  * 텍스트를 이미지 생성 프롬프트로 변환 (미리보기용)
  */
-app.post('/api/v1/build-prompt', (req: Request, res: Response) => {
+app.post(`${BASE_PATH}/api/v1/build-prompt`, (req: Request, res: Response) => {
   try {
     const { text } = req.body;
 
