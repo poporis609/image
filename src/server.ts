@@ -1,28 +1,65 @@
 /**
  * Image Generator API Server
  * 
- * History 이미지 자동 생성 REST API
+ * Strands AI Agent (Bedrock Agent Core Runtime) 프록시 서버
  */
 
 import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
-import { initPool, closePool } from './services/database.js';
 import {
-  getHistoriesWithoutImage,
-  getHistoryById,
-  generateImageForHistory,
-  generateImagesForAllHistories,
-  previewImageForHistory,
-  confirmImageForHistory
-} from './services/historyService.js';
-import { generateImage } from './services/imageGenerator.js';
-import { buildPrompt } from './services/promptBuilder.js';
-import { getKnowledgeBaseS3Url } from './services/s3Service.js';
+  BedrockAgentCoreClient,
+  InvokeAgentRuntimeCommand,
+} from '@aws-sdk/client-bedrock-agentcore';
+import { v4 as uuidv4 } from 'uuid';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const BASE_PATH = process.env.BASE_PATH || '/image';
+
+// Agent Core Runtime 설정
+const AGENT_RUNTIME_ARN = process.env.AGENT_RUNTIME_ARN || 
+  'arn:aws:bedrock-agentcore:us-east-1:324547056370:runtime/diary_orchestrator_agent-90S9ctAFht';
+const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+
+// Bedrock Agent Core 클라이언트
+let agentClient: BedrockAgentCoreClient | null = null;
+
+function getAgentClient(): BedrockAgentCoreClient {
+  if (!agentClient) {
+    agentClient = new BedrockAgentCoreClient({
+      region: AWS_REGION,
+    });
+  }
+  return agentClient;
+}
+
+/**
+ * Agent Core Runtime 호출
+ */
+async function invokeAgent(payload: Record<string, unknown>): Promise<unknown> {
+  const client = getAgentClient();
+  
+  const command = new InvokeAgentRuntimeCommand({
+    agentRuntimeArn: AGENT_RUNTIME_ARN,
+    runtimeSessionId: uuidv4(),
+    payload: new TextEncoder().encode(JSON.stringify(payload)),
+    qualifier: 'DEFAULT',
+    contentType: 'application/json',
+    accept: 'application/json',
+  });
+
+  const response = await client.send(command);
+  
+  // 스트림 응답 처리
+  if (response.response) {
+    const bytes = await response.response.transformToByteArray();
+    const resultText = new TextDecoder().decode(bytes);
+    return JSON.parse(resultText);
+  }
+  
+  return { error: 'No response from agent' };
+}
 
 // Middleware
 app.use(cors());
@@ -36,40 +73,40 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 
 // Health check
 app.get('/health', (_req: Request, res: Response) => {
-  res.json({ status: 'ok', service: 'image-generator', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', service: 'image-generator-proxy', timestamp: new Date().toISOString() });
 });
 
 app.get(`${BASE_PATH}/health`, (_req: Request, res: Response) => {
-  res.json({ status: 'ok', service: 'image-generator', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', service: 'image-generator-proxy', timestamp: new Date().toISOString() });
 });
 
 /**
  * GET /image/histories/without-image
+ * 이미지가 없는 히스토리 목록 조회
  */
 app.get(`${BASE_PATH}/histories/without-image`, async (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 10;
-    const histories = await getHistoriesWithoutImage(limit);
     
+    const result = await invokeAgent({
+      content: `이미지가 없는 히스토리 ${limit}개 조회해줘`,
+      request_type: 'image',
+    });
+
     res.json({
       success: true,
-      count: histories.length,
-      data: histories.map(h => ({
-        id: h.id,
-        userId: h.user_id,
-        content: h.content,
-        recordDate: h.record_date,
-        tags: h.tags,
-      }))
+      data: result,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[API Error]', message);
     res.status(500).json({ success: false, error: message });
   }
 });
 
 /**
  * GET /image/histories/:id
+ * 특정 히스토리 조회
  */
 app.get(`${BASE_PATH}/histories/:id`, async (req: Request, res: Response) => {
   try {
@@ -79,23 +116,14 @@ app.get(`${BASE_PATH}/histories/:id`, async (req: Request, res: Response) => {
       return;
     }
 
-    const history = await getHistoryById(historyId);
-    if (!history) {
-      res.status(404).json({ success: false, error: 'History not found' });
-      return;
-    }
+    const result = await invokeAgent({
+      content: `히스토리 ${historyId}번 정보 조회해줘`,
+      request_type: 'image',
+    });
 
     res.json({
       success: true,
-      data: {
-        id: history.id,
-        userId: history.user_id,
-        content: history.content,
-        recordDate: history.record_date,
-        tags: history.tags,
-        s3Key: history.s3_key,
-        imageUrl: history.s3_key ? getKnowledgeBaseS3Url(history.s3_key) : null,
-      }
+      data: result,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -105,6 +133,7 @@ app.get(`${BASE_PATH}/histories/:id`, async (req: Request, res: Response) => {
 
 /**
  * POST /image/histories/:id/generate-image
+ * 히스토리에 이미지 생성
  */
 app.post(`${BASE_PATH}/histories/:id/generate-image`, async (req: Request, res: Response) => {
   try {
@@ -115,26 +144,15 @@ app.post(`${BASE_PATH}/histories/:id/generate-image`, async (req: Request, res: 
     }
 
     console.log(`[API] Generating image for history ${historyId}...`);
-    const result = await generateImageForHistory(historyId);
-
-    if (result.error) {
-      res.status(result.error === 'History not found' ? 404 : 500).json({
-        success: false,
-        error: result.error
-      });
-      return;
-    }
+    
+    const result = await invokeAgent({
+      content: `히스토리 ${historyId}번 이미지 생성해줘`,
+      request_type: 'image',
+    });
 
     res.json({
       success: true,
-      data: {
-        historyId: result.historyId,
-        userId: result.userId,
-        imageGenerated: result.imageGenerated,
-        alreadyHadImage: result.hasImage && !result.imageGenerated,
-        s3Key: result.s3Key,
-        imageUrl: result.imageUrl || (result.s3Key ? getKnowledgeBaseS3Url(result.s3Key) : null),
-      }
+      data: result,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -144,6 +162,7 @@ app.post(`${BASE_PATH}/histories/:id/generate-image`, async (req: Request, res: 
 
 /**
  * POST /image/histories/:id/preview-image
+ * 이미지 미리보기 생성
  */
 app.post(`${BASE_PATH}/histories/:id/preview-image`, async (req: Request, res: Response) => {
   try {
@@ -154,27 +173,15 @@ app.post(`${BASE_PATH}/histories/:id/preview-image`, async (req: Request, res: R
     }
 
     console.log(`[API] Generating preview image for history ${historyId}...`);
-    const result = await previewImageForHistory(historyId);
-
-    if (!result.success) {
-      res.status(result.error === 'History not found' ? 404 : 500).json({
-        success: false,
-        error: result.error
-      });
-      return;
-    }
+    
+    const result = await invokeAgent({
+      content: `히스토리 ${historyId}번 이미지 미리보기 생성해줘`,
+      request_type: 'image',
+    });
 
     res.json({
       success: true,
-      data: {
-        historyId: result.historyId,
-        userId: result.userId,
-        imageBase64: result.imageBase64,
-        prompt: {
-          positive: result.positivePrompt,
-          negative: result.negativePrompt,
-        }
-      }
+      data: result,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -184,6 +191,7 @@ app.post(`${BASE_PATH}/histories/:id/preview-image`, async (req: Request, res: R
 
 /**
  * POST /image/histories/:id/confirm-image
+ * 이미지 확정 저장
  */
 app.post(`${BASE_PATH}/histories/:id/confirm-image`, async (req: Request, res: Response) => {
   try {
@@ -201,24 +209,16 @@ app.post(`${BASE_PATH}/histories/:id/confirm-image`, async (req: Request, res: R
     }
 
     console.log(`[API] Confirming image for history ${historyId}...`);
-    const result = await confirmImageForHistory(historyId, imageBase64);
-
-    if (result.error) {
-      res.status(result.error === 'History not found' ? 404 : 500).json({
-        success: false,
-        error: result.error
-      });
-      return;
-    }
+    
+    const result = await invokeAgent({
+      content: `히스토리 ${historyId}번 이미지 확정 저장해줘`,
+      request_type: 'image',
+      image_base64: imageBase64,
+    });
 
     res.json({
       success: true,
-      data: {
-        historyId: result.historyId,
-        userId: result.userId,
-        s3Key: result.s3Key,
-        imageUrl: result.imageUrl,
-      }
+      data: result,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -228,6 +228,7 @@ app.post(`${BASE_PATH}/histories/:id/confirm-image`, async (req: Request, res: R
 
 /**
  * POST /image/histories/batch-generate
+ * 배치 이미지 생성
  */
 app.post(`${BASE_PATH}/histories/batch-generate`, async (req: Request, res: Response) => {
   try {
@@ -238,27 +239,15 @@ app.post(`${BASE_PATH}/histories/batch-generate`, async (req: Request, res: Resp
     }
 
     console.log(`[API] Batch generating images for up to ${limit} histories...`);
-    const results = await generateImagesForAllHistories(limit);
-
-    const summary = {
-      total: results.length,
-      generated: results.filter(r => r.imageGenerated).length,
-      skipped: results.filter(r => r.hasImage && !r.imageGenerated).length,
-      failed: results.filter(r => !r.hasImage && !r.imageGenerated).length,
-    };
+    
+    const result = await invokeAgent({
+      content: `이미지가 없는 히스토리 ${limit}개에 대해 배치로 이미지 생성해줘`,
+      request_type: 'image',
+    });
 
     res.json({
       success: true,
-      summary,
-      data: results.map(r => ({
-        historyId: r.historyId,
-        userId: r.userId,
-        imageGenerated: r.imageGenerated,
-        alreadyHadImage: r.hasImage && !r.imageGenerated,
-        s3Key: r.s3Key,
-        imageUrl: r.imageUrl || (r.s3Key ? getKnowledgeBaseS3Url(r.s3Key) : null),
-        error: r.error,
-      }))
+      data: result,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -268,45 +257,29 @@ app.post(`${BASE_PATH}/histories/batch-generate`, async (req: Request, res: Resp
 
 /**
  * POST /image/generate
+ * 텍스트로 직접 이미지 생성
  */
 app.post(`${BASE_PATH}/generate`, async (req: Request, res: Response) => {
   try {
-    const { text, positivePrompt, negativePrompt } = req.body;
+    const { text, positivePrompt } = req.body;
 
     if (!text && !positivePrompt) {
       res.status(400).json({ success: false, error: 'Either text or positivePrompt is required' });
       return;
     }
 
-    let finalPositive: string;
-    let finalNegative: string;
-
-    if (positivePrompt) {
-      finalPositive = positivePrompt;
-      finalNegative = negativePrompt || '';
-    } else {
-      const prompt = buildPrompt(text);
-      finalPositive = prompt.positivePrompt;
-      finalNegative = prompt.negativePrompt;
-    }
-
     console.log(`[API] Generating image from text...`);
-    const result = await generateImage(finalPositive, finalNegative);
-
-    if (!result.success) {
-      res.status(500).json({ success: false, error: result.error });
-      return;
-    }
+    
+    const result = await invokeAgent({
+      content: positivePrompt 
+        ? `다음 프롬프트로 이미지 생성해줘: ${positivePrompt}`
+        : `다음 텍스트로 이미지 생성해줘: ${text}`,
+      request_type: 'image',
+    });
 
     res.json({
       success: true,
-      data: {
-        imageBase64: result.imageBase64,
-        prompt: {
-          positive: finalPositive,
-          negative: finalNegative,
-        }
-      }
+      data: result,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -316,8 +289,9 @@ app.post(`${BASE_PATH}/generate`, async (req: Request, res: Response) => {
 
 /**
  * POST /image/build-prompt
+ * 프롬프트만 생성
  */
-app.post(`${BASE_PATH}/build-prompt`, (req: Request, res: Response) => {
+app.post(`${BASE_PATH}/build-prompt`, async (req: Request, res: Response) => {
   try {
     const { text } = req.body;
 
@@ -326,14 +300,14 @@ app.post(`${BASE_PATH}/build-prompt`, (req: Request, res: Response) => {
       return;
     }
 
-    const prompt = buildPrompt(text);
+    const result = await invokeAgent({
+      content: `다음 텍스트를 이미지 프롬프트로 변환해줘 (이미지 생성은 하지 마): ${text}`,
+      request_type: 'image',
+    });
 
     res.json({
       success: true,
-      data: {
-        positivePrompt: prompt.positivePrompt,
-        negativePrompt: prompt.negativePrompt,
-      }
+      data: result,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -353,39 +327,26 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 // Graceful shutdown
-process.on('SIGTERM', async () => {
+process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down...');
-  await closePool();
   process.exit(0);
 });
 
-process.on('SIGINT', async () => {
+process.on('SIGINT', () => {
   console.log('SIGINT received, shutting down...');
-  await closePool();
   process.exit(0);
 });
 
 // Start server
-async function start() {
-  try {
-    await initPool();
-    console.log('[Server] Database connected');
-    
-    app.listen(PORT, () => {
-      console.log('='.repeat(60));
-      console.log('🚀 Image Generator API Server');
-      console.log('='.repeat(60));
-      console.log(`📡 Server running on port ${PORT}`);
-      console.log(`📖 Health check: http://localhost:${PORT}${BASE_PATH}/health`);
-      console.log(`🎨 API Base: http://localhost:${PORT}${BASE_PATH}`);
-      console.log('='.repeat(60));
-    });
-  } catch (error) {
-    console.error('[Server] Failed to start:', error);
-    process.exit(1);
-  }
-}
-
-start();
+app.listen(PORT, () => {
+  console.log('='.repeat(60));
+  console.log('🚀 Image Generator Proxy Server');
+  console.log('='.repeat(60));
+  console.log(`📡 Server running on port ${PORT}`);
+  console.log(`📖 Health check: http://localhost:${PORT}${BASE_PATH}/health`);
+  console.log(`🎨 API Base: http://localhost:${PORT}${BASE_PATH}`);
+  console.log(`🤖 Agent ARN: ${AGENT_RUNTIME_ARN}`);
+  console.log('='.repeat(60));
+});
 
 export default app;

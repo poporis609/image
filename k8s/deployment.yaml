@@ -26,18 +26,12 @@ spec:
           env:
             - name: PORT
               value: "3000"
-            - name: USE_SECRETS_MANAGER
-              value: "true"
-            - name: DB_SECRET_NAME
-              value: "journal-api/database"
+            - name: BASE_PATH
+              value: "/image"
             - name: AWS_REGION
               value: "us-east-1"
-            - name: KNOWLEDGE_BASE_BUCKET
-              value: "knowledge-base-test-6575574"
-            - name: BEDROCK_FLOW_ID
-              value: "E5J1KYPALJ"
-            - name: BEDROCK_FLOW_ALIAS_ID
-              value: "HZ5MQPO2A5"
+            - name: AGENT_RUNTIME_ARN
+              value: "arn:aws:bedrock-agentcore:us-east-1:324547056370:runtime/diary_orchestrator_agent-90S9ctAFht"
           resources:
             requests:
               cpu: 100m
