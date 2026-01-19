@@ -39,26 +39,52 @@ function getAgentClient(): BedrockAgentCoreClient {
  */
 async function invokeAgent(payload: Record<string, unknown>): Promise<unknown> {
   const client = getAgentClient();
+  const sessionId = uuidv4();
+  
+  console.log(`[Agent] ========== Agent 호출 시작 ==========`);
+  console.log(`[Agent] Session ID: ${sessionId}`);
+  console.log(`[Agent] Payload:`, JSON.stringify(payload, null, 2));
   
   const command = new InvokeAgentRuntimeCommand({
     agentRuntimeArn: AGENT_RUNTIME_ARN,
-    runtimeSessionId: uuidv4(),
+    runtimeSessionId: sessionId,
     payload: new TextEncoder().encode(JSON.stringify(payload)),
     qualifier: 'DEFAULT',
     contentType: 'application/json',
     accept: 'application/json',
   });
 
-  const response = await client.send(command);
-  
-  // 스트림 응답 처리
-  if (response.response) {
-    const bytes = await response.response.transformToByteArray();
-    const resultText = new TextDecoder().decode(bytes);
-    return JSON.parse(resultText);
+  try {
+    const startTime = Date.now();
+    const response = await client.send(command);
+    const duration = Date.now() - startTime;
+    
+    console.log(`[Agent] 응답 수신 (${duration}ms)`);
+    
+    // 스트림 응답 처리
+    if (response.response) {
+      const bytes = await response.response.transformToByteArray();
+      const resultText = new TextDecoder().decode(bytes);
+      const result = JSON.parse(resultText);
+      
+      console.log(`[Agent] 응답 타입: ${result.type || 'unknown'}`);
+      console.log(`[Agent] 응답 메시지: ${result.message || 'N/A'}`);
+      if (result.content) {
+        console.log(`[Agent] 응답 내용 길이: ${result.content.length} chars`);
+      }
+      console.log(`[Agent] ========== Agent 호출 완료 ==========`);
+      
+      return result;
+    }
+    
+    console.log(`[Agent] ⚠️ 응답 없음`);
+    console.log(`[Agent] ========== Agent 호출 완료 ==========`);
+    return { error: 'No response from agent' };
+  } catch (error) {
+    console.error(`[Agent] ❌ 에러 발생:`, error);
+    console.log(`[Agent] ========== Agent 호출 실패 ==========`);
+    throw error;
   }
-  
-  return { error: 'No response from agent' };
 }
 
 // Middleware
@@ -66,8 +92,29 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
 // Request logging
-app.use((req: Request, _res: Response, next: NextFunction) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const startTime = Date.now();
+  console.log(`[Request] ➡️  ${req.method} ${req.path}`);
+  if (req.body && Object.keys(req.body).length > 0) {
+    const bodyLog = { ...req.body };
+    // base64 이미지는 길이만 표시
+    if (bodyLog.imageBase64) {
+      bodyLog.imageBase64 = `[base64 image, ${bodyLog.imageBase64.length} chars]`;
+    }
+    if (bodyLog.image_base64) {
+      bodyLog.image_base64 = `[base64 image, ${bodyLog.image_base64.length} chars]`;
+    }
+    console.log(`[Request] Body:`, JSON.stringify(bodyLog));
+  }
+  
+  // 응답 로깅
+  const originalSend = res.send.bind(res);
+  res.send = (body: unknown) => {
+    const duration = Date.now() - startTime;
+    console.log(`[Response] ⬅️  ${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
+    return originalSend(body);
+  };
+  
   next();
 });
 
