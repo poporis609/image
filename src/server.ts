@@ -210,20 +210,37 @@ app.post(`${BASE_PATH}/histories/:id/generate-image`, async (req: Request, res: 
 /**
  * POST /image/histories/:id/preview-image
  * 이미지 미리보기 생성
+ * 
+ * Body:
+ *   - text: 일기 텍스트 (필수) - 프론트에서 description 전달
  */
 app.post(`${BASE_PATH}/histories/:id/preview-image`, async (req: Request, res: Response) => {
   try {
     const historyId = parseInt(req.params.id);
+    const { text } = req.body;
+    
     if (isNaN(historyId)) {
       res.status(400).json({ success: false, error: 'Invalid history ID' });
       return;
     }
 
+    // text가 없으면 에러 (Agent Core는 DB 접근 불가)
+    if (!text) {
+      console.log(`[API] ⚠️ text 파라미터 누락 - 프론트에서 description을 전달해야 합니다`);
+      res.status(400).json({ 
+        success: false, 
+        error: 'text is required. 프론트에서 일기 내용(description)을 전달해주세요.' 
+      });
+      return;
+    }
+
     console.log(`[API] Generating preview image for history ${historyId}...`);
+    console.log(`[API] Text: ${text.substring(0, 100)}...`);
     
     const result = await invokeAgent({
-      content: `히스토리 ${historyId}번 이미지 미리보기 생성해줘`,
+      content: `이미지 미리보기 생성`,
       request_type: 'image',
+      text: text,  // 일기 텍스트 전달
     });
 
     res.json({
@@ -238,12 +255,17 @@ app.post(`${BASE_PATH}/histories/:id/preview-image`, async (req: Request, res: R
 
 /**
  * POST /image/histories/:id/confirm-image
- * 이미지 확정 저장
+ * 이미지 확정 저장 (S3 업로드)
+ * 
+ * Body:
+ *   - imageBase64: 저장할 이미지 (필수)
+ *   - userId: 사용자 ID - cognito_sub (필수, S3 경로용)
+ *   - recordDate: 기록 날짜 (선택, S3 경로용)
  */
 app.post(`${BASE_PATH}/histories/:id/confirm-image`, async (req: Request, res: Response) => {
   try {
     const historyId = parseInt(req.params.id);
-    const { imageBase64 } = req.body;
+    const { imageBase64, userId, recordDate } = req.body;
 
     if (isNaN(historyId)) {
       res.status(400).json({ success: false, error: 'Invalid history ID' });
@@ -255,12 +277,25 @@ app.post(`${BASE_PATH}/histories/:id/confirm-image`, async (req: Request, res: R
       return;
     }
 
+    if (!userId) {
+      console.log(`[API] ⚠️ userId 파라미터 누락 - S3 업로드에 필요합니다`);
+      res.status(400).json({ 
+        success: false, 
+        error: 'userId is required. 프론트에서 cognito_sub을 전달해주세요.' 
+      });
+      return;
+    }
+
     console.log(`[API] Confirming image for history ${historyId}...`);
+    console.log(`[API] User ID: ${userId}`);
+    console.log(`[API] Record Date: ${recordDate || 'not provided'}`);
     
     const result = await invokeAgent({
-      content: `히스토리 ${historyId}번 이미지 확정 저장해줘`,
+      content: `이미지 S3 업로드`,
       request_type: 'image',
       image_base64: imageBase64,
+      user_id: userId,
+      record_date: recordDate,
     });
 
     res.json({
