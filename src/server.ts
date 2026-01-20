@@ -1,85 +1,52 @@
 /**
  * Image Generator API Server
  * 
- * Strands AI Agent (Bedrock Agent Core Runtime) 프록시 서버
+ * FastAPI Agent 서버 프록시
  */
 
 import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
-import {
-  BedrockAgentCoreClient,
-  InvokeAgentRuntimeCommand,
-} from '@aws-sdk/client-bedrock-agentcore';
-import { v4 as uuidv4 } from 'uuid';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const BASE_PATH = process.env.BASE_PATH || '/image';
 
-// Agent Core Runtime 설정
-const AGENT_RUNTIME_ARN = process.env.AGENT_RUNTIME_ARN || 
-  'arn:aws:bedrock-agentcore:us-east-1:324547056370:runtime/diary_orchestrator_agent-90S9ctAFht';
-const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
-
-// Bedrock Agent Core 클라이언트
-let agentClient: BedrockAgentCoreClient | null = null;
-
-function getAgentClient(): BedrockAgentCoreClient {
-  if (!agentClient) {
-    agentClient = new BedrockAgentCoreClient({
-      region: AWS_REGION,
-    });
-  }
-  return agentClient;
-}
+// FastAPI Agent 서버 URL
+const AGENT_API_URL = process.env.AGENT_API_URL || 'https://api.aws11.shop/agent/image';
 
 /**
- * Agent Core Runtime 호출
+ * FastAPI Agent 서버 호출
  */
-async function invokeAgent(payload: Record<string, unknown>): Promise<unknown> {
-  const client = getAgentClient();
-  const sessionId = uuidv4();
-  
+async function invokeImageAgent(payload: Record<string, unknown>): Promise<unknown> {
   console.log(`[Agent] ========== Agent 호출 시작 ==========`);
-  console.log(`[Agent] Session ID: ${sessionId}`);
-  console.log(`[Agent] Payload:`, JSON.stringify(payload, null, 2));
+  console.log(`[Agent] URL: ${AGENT_API_URL}`);
+  console.log(`[Agent] Payload:`, JSON.stringify(payload, null, 2).substring(0, 500));
   
-  const command = new InvokeAgentRuntimeCommand({
-    agentRuntimeArn: AGENT_RUNTIME_ARN,
-    runtimeSessionId: sessionId,
-    payload: new TextEncoder().encode(JSON.stringify(payload)),
-    qualifier: 'DEFAULT',
-    contentType: 'application/json',
-    accept: 'application/json',
-  });
-
   try {
     const startTime = Date.now();
-    const response = await client.send(command);
+    const response = await fetch(AGENT_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
     const duration = Date.now() - startTime;
     
-    console.log(`[Agent] 응답 수신 (${duration}ms)`);
+    console.log(`[Agent] 응답 수신 (${duration}ms) - Status: ${response.status}`);
     
-    // 스트림 응답 처리
-    if (response.response) {
-      const bytes = await response.response.transformToByteArray();
-      const resultText = new TextDecoder().decode(bytes);
-      const result = JSON.parse(resultText);
-      
-      console.log(`[Agent] 응답 타입: ${result.type || 'unknown'}`);
-      console.log(`[Agent] 응답 메시지: ${result.message || 'N/A'}`);
-      if (result.content) {
-        console.log(`[Agent] 응답 내용 길이: ${result.content.length} chars`);
-      }
-      console.log(`[Agent] ========== Agent 호출 완료 ==========`);
-      
-      return result;
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[Agent] ❌ 에러 응답:`, errorText);
+      throw new Error(`Agent API error: ${response.status} - ${errorText}`);
     }
     
-    console.log(`[Agent] ⚠️ 응답 없음`);
+    const result = await response.json();
+    console.log(`[Agent] 응답 success: ${result.success}`);
     console.log(`[Agent] ========== Agent 호출 완료 ==========`);
-    return { error: 'No response from agent' };
+    
+    return result;
   } catch (error) {
     console.error(`[Agent] ❌ 에러 발생:`, error);
     console.log(`[Agent] ========== Agent 호출 실패 ==========`);
@@ -97,7 +64,6 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   console.log(`[Request] ➡️  ${req.method} ${req.path}`);
   if (req.body && Object.keys(req.body).length > 0) {
     const bodyLog = { ...req.body };
-    // base64 이미지는 길이만 표시
     if (bodyLog.imageBase64) {
       bodyLog.imageBase64 = `[base64 image, ${bodyLog.imageBase64.length} chars]`;
     }
@@ -107,7 +73,6 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     console.log(`[Request] Body:`, JSON.stringify(bodyLog));
   }
   
-  // 응답 로깅
   const originalSend = res.send.bind(res);
   res.send = (body: unknown) => {
     const duration = Date.now() - startTime;
@@ -128,91 +93,8 @@ app.get(`${BASE_PATH}/health`, (_req: Request, res: Response) => {
 });
 
 /**
- * GET /image/histories/without-image
- * 이미지가 없는 히스토리 목록 조회
- */
-app.get(`${BASE_PATH}/histories/without-image`, async (req: Request, res: Response) => {
-  try {
-    const limit = parseInt(req.query.limit as string) || 10;
-    
-    const result = await invokeAgent({
-      user_input: `이미지가 없는 히스토리 ${limit}개 조회해줘`,
-      request_type: 'image',
-    });
-
-    res.json({
-      success: true,
-      data: result,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[API Error]', message);
-    res.status(500).json({ success: false, error: message });
-  }
-});
-
-/**
- * GET /image/histories/:id
- * 특정 히스토리 조회
- */
-app.get(`${BASE_PATH}/histories/:id`, async (req: Request, res: Response) => {
-  try {
-    const historyId = parseInt(req.params.id);
-    if (isNaN(historyId)) {
-      res.status(400).json({ success: false, error: 'Invalid history ID' });
-      return;
-    }
-
-    const result = await invokeAgent({
-      user_input: `히스토리 ${historyId}번 정보 조회해줘`,
-      request_type: 'image',
-    });
-
-    res.json({
-      success: true,
-      data: result,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    res.status(500).json({ success: false, error: message });
-  }
-});
-
-/**
- * POST /image/histories/:id/generate-image
- * 히스토리에 이미지 생성
- */
-app.post(`${BASE_PATH}/histories/:id/generate-image`, async (req: Request, res: Response) => {
-  try {
-    const historyId = parseInt(req.params.id);
-    if (isNaN(historyId)) {
-      res.status(400).json({ success: false, error: 'Invalid history ID' });
-      return;
-    }
-
-    console.log(`[API] Generating image for history ${historyId}...`);
-    
-    const result = await invokeAgent({
-      user_input: `히스토리 ${historyId}번 이미지 생성해줘`,
-      request_type: 'image',
-    });
-
-    res.json({
-      success: true,
-      data: result,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    res.status(500).json({ success: false, error: message });
-  }
-});
-
-/**
  * POST /image/histories/:id/preview-image
  * 이미지 미리보기 생성
- * 
- * Body:
- *   - text: 일기 텍스트 (필수) - 프론트에서 description 전달
  */
 app.post(`${BASE_PATH}/histories/:id/preview-image`, async (req: Request, res: Response) => {
   try {
@@ -224,9 +106,7 @@ app.post(`${BASE_PATH}/histories/:id/preview-image`, async (req: Request, res: R
       return;
     }
 
-    // text가 없으면 에러 (Agent Core는 DB 접근 불가)
     if (!text) {
-      console.log(`[API] ⚠️ text 파라미터 누락 - 프론트에서 description을 전달해야 합니다`);
       res.status(400).json({ 
         success: false, 
         error: 'text is required. 프론트에서 일기 내용(description)을 전달해주세요.' 
@@ -235,18 +115,13 @@ app.post(`${BASE_PATH}/histories/:id/preview-image`, async (req: Request, res: R
     }
 
     console.log(`[API] Generating preview image for history ${historyId}...`);
-    console.log(`[API] Text: ${text.substring(0, 100)}...`);
     
-    const result = await invokeAgent({
-      user_input: `이미지 미리보기 생성`,
-      request_type: 'image',
-      text: text,  // 일기 텍스트 전달
+    const result = await invokeImageAgent({
+      content: '이미지 미리보기 생성해줘',
+      text: text,
     });
 
-    res.json({
-      success: true,
-      data: result,
-    });
+    res.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ success: false, error: message });
@@ -256,11 +131,6 @@ app.post(`${BASE_PATH}/histories/:id/preview-image`, async (req: Request, res: R
 /**
  * POST /image/histories/:id/confirm-image
  * 이미지 확정 저장 (S3 업로드)
- * 
- * Body:
- *   - imageBase64: 저장할 이미지 (필수)
- *   - userId: 사용자 ID - cognito_sub (필수, S3 경로용)
- *   - recordDate: 기록 날짜 (선택, S3 경로용)
  */
 app.post(`${BASE_PATH}/histories/:id/confirm-image`, async (req: Request, res: Response) => {
   try {
@@ -278,7 +148,6 @@ app.post(`${BASE_PATH}/histories/:id/confirm-image`, async (req: Request, res: R
     }
 
     if (!userId) {
-      console.log(`[API] ⚠️ userId 파라미터 누락 - S3 업로드에 필요합니다`);
       res.status(400).json({ 
         success: false, 
         error: 'userId is required. 프론트에서 cognito_sub을 전달해주세요.' 
@@ -287,50 +156,15 @@ app.post(`${BASE_PATH}/histories/:id/confirm-image`, async (req: Request, res: R
     }
 
     console.log(`[API] Confirming image for history ${historyId}...`);
-    console.log(`[API] User ID: ${userId}`);
-    console.log(`[API] Record Date: ${recordDate || 'not provided'}`);
     
-    const result = await invokeAgent({
-      user_input: `이미지 S3 업로드`,
-      request_type: 'image',
-      image_base64: imageBase64,
+    const result = await invokeImageAgent({
+      content: '이 이미지를 히스토리에 추가해줘',
       user_id: userId,
+      image_base64: imageBase64,
       record_date: recordDate,
     });
 
-    res.json({
-      success: true,
-      data: result,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    res.status(500).json({ success: false, error: message });
-  }
-});
-
-/**
- * POST /image/histories/batch-generate
- * 배치 이미지 생성
- */
-app.post(`${BASE_PATH}/histories/batch-generate`, async (req: Request, res: Response) => {
-  try {
-    const limit = parseInt(req.body.limit as string) || 5;
-    if (limit > 20) {
-      res.status(400).json({ success: false, error: 'Limit cannot exceed 20' });
-      return;
-    }
-
-    console.log(`[API] Batch generating images for up to ${limit} histories...`);
-    
-    const result = await invokeAgent({
-      user_input: `이미지가 없는 히스토리 ${limit}개에 대해 배치로 이미지 생성해줘`,
-      request_type: 'image',
-    });
-
-    res.json({
-      success: true,
-      data: result,
-    });
+    res.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ success: false, error: message });
@@ -352,17 +186,12 @@ app.post(`${BASE_PATH}/generate`, async (req: Request, res: Response) => {
 
     console.log(`[API] Generating image from text...`);
     
-    const result = await invokeAgent({
-      user_input: positivePrompt 
-        ? `다음 프롬프트로 이미지 생성해줘: ${positivePrompt}`
-        : `다음 텍스트로 이미지 생성해줘: ${text}`,
-      request_type: 'image',
+    const result = await invokeImageAgent({
+      content: '이미지 미리보기 생성해줘',
+      text: text || positivePrompt,
     });
 
-    res.json({
-      success: true,
-      data: result,
-    });
+    res.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ success: false, error: message });
@@ -382,15 +211,12 @@ app.post(`${BASE_PATH}/build-prompt`, async (req: Request, res: Response) => {
       return;
     }
 
-    const result = await invokeAgent({
-      user_input: `다음 텍스트를 이미지 프롬프트로 변환해줘 (이미지 생성은 하지 마): ${text}`,
-      request_type: 'image',
+    const result = await invokeImageAgent({
+      content: '프롬프트만 생성해줘',
+      text: text,
     });
 
-    res.json({
-      success: true,
-      data: result,
-    });
+    res.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ success: false, error: message });
@@ -427,7 +253,7 @@ app.listen(PORT, () => {
   console.log(`📡 Server running on port ${PORT}`);
   console.log(`📖 Health check: http://localhost:${PORT}${BASE_PATH}/health`);
   console.log(`🎨 API Base: http://localhost:${PORT}${BASE_PATH}`);
-  console.log(`🤖 Agent ARN: ${AGENT_RUNTIME_ARN}`);
+  console.log(`🤖 Agent API: ${AGENT_API_URL}`);
   console.log('='.repeat(60));
 });
 
