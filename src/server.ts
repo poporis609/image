@@ -136,7 +136,7 @@ app.get(`${BASE_PATH}/histories/without-image`, async (req: Request, res: Respon
     const limit = parseInt(req.query.limit as string) || 10;
     
     const result = await invokeAgent({
-      content: `이미지가 없는 히스토리 ${limit}개 조회해줘`,
+      user_input: `이미지가 없는 히스토리 ${limit}개 조회해줘`,
       request_type: 'image',
     });
 
@@ -164,7 +164,7 @@ app.get(`${BASE_PATH}/histories/:id`, async (req: Request, res: Response) => {
     }
 
     const result = await invokeAgent({
-      content: `히스토리 ${historyId}번 정보 조회해줘`,
+      user_input: `히스토리 ${historyId}번 정보 조회해줘`,
       request_type: 'image',
     });
 
@@ -193,7 +193,7 @@ app.post(`${BASE_PATH}/histories/:id/generate-image`, async (req: Request, res: 
     console.log(`[API] Generating image for history ${historyId}...`);
     
     const result = await invokeAgent({
-      content: `히스토리 ${historyId}번 이미지 생성해줘`,
+      user_input: `히스토리 ${historyId}번 이미지 생성해줘`,
       request_type: 'image',
     });
 
@@ -238,7 +238,7 @@ app.post(`${BASE_PATH}/histories/:id/preview-image`, async (req: Request, res: R
     console.log(`[API] Text: ${text.substring(0, 100)}...`);
     
     const result = await invokeAgent({
-      content: `이미지 미리보기 생성`,
+      user_input: `이미지 미리보기 생성`,
       request_type: 'image',
       text: text,  // 일기 텍스트 전달
     });
@@ -291,7 +291,7 @@ app.post(`${BASE_PATH}/histories/:id/confirm-image`, async (req: Request, res: R
     console.log(`[API] Record Date: ${recordDate || 'not provided'}`);
     
     const result = await invokeAgent({
-      content: `이미지 S3 업로드`,
+      user_input: `이미지 S3 업로드`,
       request_type: 'image',
       image_base64: imageBase64,
       user_id: userId,
@@ -323,7 +323,7 @@ app.post(`${BASE_PATH}/histories/batch-generate`, async (req: Request, res: Resp
     console.log(`[API] Batch generating images for up to ${limit} histories...`);
     
     const result = await invokeAgent({
-      content: `이미지가 없는 히스토리 ${limit}개에 대해 배치로 이미지 생성해줘`,
+      user_input: `이미지가 없는 히스토리 ${limit}개에 대해 배치로 이미지 생성해줘`,
       request_type: 'image',
     });
 
@@ -353,7 +353,7 @@ app.post(`${BASE_PATH}/generate`, async (req: Request, res: Response) => {
     console.log(`[API] Generating image from text...`);
     
     const result = await invokeAgent({
-      content: positivePrompt 
+      user_input: positivePrompt 
         ? `다음 프롬프트로 이미지 생성해줘: ${positivePrompt}`
         : `다음 텍스트로 이미지 생성해줘: ${text}`,
       request_type: 'image',
@@ -383,7 +383,7 @@ app.post(`${BASE_PATH}/build-prompt`, async (req: Request, res: Response) => {
     }
 
     const result = await invokeAgent({
-      content: `다음 텍스트를 이미지 프롬프트로 변환해줘 (이미지 생성은 하지 마): ${text}`,
+      user_input: `다음 텍스트를 이미지 프롬프트로 변환해줘 (이미지 생성은 하지 마): ${text}`,
       request_type: 'image',
     });
 
