@@ -7,7 +7,7 @@
 import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,9 +15,6 @@ const BASE_PATH = process.env.BASE_PATH || '/image';
 
 // FastAPI Agent 서버 URL
 const AGENT_API_URL = process.env.AGENT_API_URL || 'https://api.aws11.shop/agent/image';
-
-// Journal API URL
-const JOURNAL_API_URL = process.env.JOURNAL_API_URL || 'https://api.aws11.shop/journal';
 
 // S3 설정
 const S3_BUCKET = process.env.S3_BUCKET || 'knowledge-base-test-6575574';
@@ -122,20 +119,51 @@ async function deleteFromS3(s3UrlOrKey: string): Promise<boolean> {
 }
 
 /**
- * Journal API에서 기존 s3_key 조회
+ * S3 폴더 내 기존 이미지들 삭제
  */
-async function getExistingS3Key(historyId: number): Promise<string | null> {
+async function deleteExistingImagesInFolder(userId: string, recordDate?: string): Promise<number> {
+  const date = recordDate ? new Date(recordDate) : new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  
+  const prefix = `${userId}/history/${year}/${month}/${day}/`;
+  
   try {
-    const response = await fetch(`${JOURNAL_API_URL}/history/${historyId}/check-s3`);
-    if (!response.ok) {
-      console.warn(`[Journal] Failed to get s3_key for history ${historyId}`);
-      return null;
+    // 폴더 내 파일 목록 조회
+    const listResponse = await s3Client.send(new ListObjectsV2Command({
+      Bucket: S3_BUCKET,
+      Prefix: prefix,
+    }));
+    
+    if (!listResponse.Contents || listResponse.Contents.length === 0) {
+      console.log(`[S3] No existing images in folder: ${prefix}`);
+      return 0;
     }
-    const data = await response.json();
-    return data.s3_key || null;
+    
+    // 이미지 파일만 필터링 (image_로 시작하는 png 파일)
+    const imageFiles = listResponse.Contents.filter(obj => 
+      obj.Key && obj.Key.includes('/image_') && obj.Key.endsWith('.png')
+    );
+    
+    // 각 이미지 삭제
+    let deletedCount = 0;
+    for (const obj of imageFiles) {
+      if (obj.Key) {
+        await s3Client.send(new DeleteObjectCommand({
+          Bucket: S3_BUCKET,
+          Key: obj.Key,
+        }));
+        console.log(`[S3] Deleted existing image: ${obj.Key}`);
+        deletedCount++;
+      }
+    }
+    
+    console.log(`[S3] Deleted ${deletedCount} existing images from ${prefix}`);
+    return deletedCount;
   } catch (error) {
-    console.error(`[Journal] Error fetching s3_key:`, error);
-    return null;
+    console.error(`[S3] Error deleting existing images:`, error);
+    return 0;
   }
 }
 
@@ -254,12 +282,9 @@ app.post(`${BASE_PATH}/histories/:id/confirm-image`, async (req: Request, res: R
 
     console.log(`[API] Confirming image for history ${historyId}...`);
     
-    // 1. 기존 이미지가 있으면 S3에서 삭제
-    const existingS3Key = await getExistingS3Key(historyId);
-    if (existingS3Key) {
-      console.log(`[API] Deleting existing image: ${existingS3Key}`);
-      await deleteFromS3(existingS3Key);
-    }
+    // 1. 해당 날짜 폴더의 기존 이미지들 삭제
+    const deletedCount = await deleteExistingImagesInFolder(userId, recordDate);
+    console.log(`[API] Deleted ${deletedCount} existing images`);
     
     // 2. 새 이미지 S3 업로드
     const { s3Key, imageUrl } = await uploadToS3(userId, imageBase64, recordDate);
@@ -271,6 +296,7 @@ app.post(`${BASE_PATH}/histories/:id/confirm-image`, async (req: Request, res: R
         userId,
         s3Key,
         imageUrl,
+        deletedCount,
       }
     });
   } catch (error) {
