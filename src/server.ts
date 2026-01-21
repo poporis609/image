@@ -119,9 +119,21 @@ app.post(`${BASE_PATH}/histories/:id/preview-image`, async (req: Request, res: R
     const result = await invokeImageAgent({
       action: 'generate',
       text: text,
-    });
+    }) as { success: boolean; imageBase64?: string; prompt?: object; error?: string };
 
-    res.json(result);
+    // 프론트엔드 기대 형식에 맞게 응답 변환
+    if (result.success && result.imageBase64) {
+      res.json({
+        success: true,
+        data: {
+          historyId,
+          imageBase64: result.imageBase64,
+          prompt: result.prompt,
+        }
+      });
+    } else {
+      res.json(result);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ success: false, error: message });
@@ -162,9 +174,22 @@ app.post(`${BASE_PATH}/histories/:id/confirm-image`, async (req: Request, res: R
       user_id: userId,
       image_base64: imageBase64,
       record_date: recordDate,
-    });
+    }) as { success: boolean; s3Key?: string; imageUrl?: string; userId?: string; error?: string };
 
-    res.json(result);
+    // 프론트엔드 기대 형식에 맞게 응답 변환
+    if (result.success && result.s3Key) {
+      res.json({
+        success: true,
+        data: {
+          historyId,
+          userId: result.userId,
+          s3Key: result.s3Key,
+          imageUrl: result.imageUrl,
+        }
+      });
+    } else {
+      res.json(result);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ success: false, error: message });
