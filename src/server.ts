@@ -1,12 +1,13 @@
 /**
  * Image Generator API Server
  * 
- * FastAPI Agent 서버 프록시
+ * FastAPI Agent 서버 프록시 + S3 이미지 관리
  */
 
 import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,6 +15,15 @@ const BASE_PATH = process.env.BASE_PATH || '/image';
 
 // FastAPI Agent 서버 URL
 const AGENT_API_URL = process.env.AGENT_API_URL || 'https://api.aws11.shop/agent/image';
+
+// Journal API URL
+const JOURNAL_API_URL = process.env.JOURNAL_API_URL || 'https://api.aws11.shop/journal';
+
+// S3 설정
+const S3_BUCKET = process.env.S3_BUCKET || 'knowledge-base-test-6575574';
+const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+
+const s3Client = new S3Client({ region: AWS_REGION });
 
 /**
  * FastAPI Agent 서버 호출
@@ -51,6 +61,77 @@ async function invokeImageAgent(payload: Record<string, unknown>): Promise<unkno
     console.error(`[Agent] ❌ 에러 발생:`, error);
     console.log(`[Agent] ========== Agent 호출 실패 ==========`);
     throw error;
+  }
+}
+
+/**
+ * S3에 이미지 업로드
+ */
+async function uploadToS3(userId: string, imageBase64: string, recordDate?: string): Promise<{ s3Key: string; imageUrl: string }> {
+  const date = recordDate ? new Date(recordDate) : new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const timestamp = Date.now();
+  
+  const s3Key = `${userId}/history/${year}/${month}/${day}/image_${timestamp}.png`;
+  
+  const imageBuffer = Buffer.from(imageBase64, 'base64');
+  
+  await s3Client.send(new PutObjectCommand({
+    Bucket: S3_BUCKET,
+    Key: s3Key,
+    Body: imageBuffer,
+    ContentType: 'image/png',
+  }));
+  
+  const imageUrl = `https://${S3_BUCKET}.s3.${AWS_REGION}.amazonaws.com/${s3Key}`;
+  console.log(`[S3] Uploaded: ${s3Key}`);
+  
+  return { s3Key, imageUrl };
+}
+
+/**
+ * S3에서 이미지 삭제
+ */
+async function deleteFromS3(s3Url: string): Promise<boolean> {
+  try {
+    // URL에서 S3 key 추출
+    const parts = s3Url.split('.amazonaws.com/');
+    if (parts.length < 2) {
+      console.warn(`[S3] Invalid S3 URL format: ${s3Url}`);
+      return false;
+    }
+    const s3Key = parts[1];
+    
+    await s3Client.send(new DeleteObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: s3Key,
+    }));
+    
+    console.log(`[S3] Deleted: ${s3Key}`);
+    return true;
+  } catch (error) {
+    console.error(`[S3] Delete error:`, error);
+    return false;
+  }
+}
+
+/**
+ * Journal API에서 기존 s3_key 조회
+ */
+async function getExistingS3Key(historyId: number): Promise<string | null> {
+  try {
+    const response = await fetch(`${JOURNAL_API_URL}/history/${historyId}/check-s3`);
+    if (!response.ok) {
+      console.warn(`[Journal] Failed to get s3_key for history ${historyId}`);
+      return null;
+    }
+    const data = await response.json();
+    return data.s3_key || null;
+  } catch (error) {
+    console.error(`[Journal] Error fetching s3_key:`, error);
+    return null;
   }
 }
 
@@ -142,7 +223,7 @@ app.post(`${BASE_PATH}/histories/:id/preview-image`, async (req: Request, res: R
 
 /**
  * POST /image/histories/:id/confirm-image
- * 이미지 확정 저장 (S3 업로드)
+ * 이미지 확정 저장 (S3 업로드 + 기존 이미지 삭제)
  */
 app.post(`${BASE_PATH}/histories/:id/confirm-image`, async (req: Request, res: Response) => {
   try {
@@ -169,27 +250,25 @@ app.post(`${BASE_PATH}/histories/:id/confirm-image`, async (req: Request, res: R
 
     console.log(`[API] Confirming image for history ${historyId}...`);
     
-    const result = await invokeImageAgent({
-      action: 'upload',
-      user_id: userId,
-      image_base64: imageBase64,
-      record_date: recordDate,
-    }) as { success: boolean; s3Key?: string; imageUrl?: string; userId?: string; error?: string };
-
-    // 프론트엔드 기대 형식에 맞게 응답 변환
-    if (result.success && result.s3Key) {
-      res.json({
-        success: true,
-        data: {
-          historyId,
-          userId: result.userId,
-          s3Key: result.s3Key,
-          imageUrl: result.imageUrl,
-        }
-      });
-    } else {
-      res.json(result);
+    // 1. 기존 이미지가 있으면 S3에서 삭제
+    const existingS3Key = await getExistingS3Key(historyId);
+    if (existingS3Key) {
+      console.log(`[API] Deleting existing image: ${existingS3Key}`);
+      await deleteFromS3(existingS3Key);
     }
+    
+    // 2. 새 이미지 S3 업로드
+    const { s3Key, imageUrl } = await uploadToS3(userId, imageBase64, recordDate);
+
+    res.json({
+      success: true,
+      data: {
+        historyId,
+        userId,
+        s3Key,
+        imageUrl,
+      }
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ success: false, error: message });
