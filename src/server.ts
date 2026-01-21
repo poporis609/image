@@ -168,7 +168,10 @@ async function deleteExistingImagesInFolder(userId: string, recordDate?: string)
 }
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: ['https://api.aws11.shop', 'https://www.aws11.shop', 'https://web.aws11.shop'],
+  credentials: true
+}));
 app.use(express.json({ limit: '50mb' }));
 
 // Request logging
