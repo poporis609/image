@@ -117,7 +117,7 @@ app.post(`${BASE_PATH}/histories/:id/preview-image`, async (req: Request, res: R
     console.log(`[API] Generating preview image for history ${historyId}...`);
     
     const result = await invokeImageAgent({
-      content: '이미지 미리보기 생성해줘',
+      action: 'generate',
       text: text,
     });
 
@@ -158,7 +158,7 @@ app.post(`${BASE_PATH}/histories/:id/confirm-image`, async (req: Request, res: R
     console.log(`[API] Confirming image for history ${historyId}...`);
     
     const result = await invokeImageAgent({
-      content: '이 이미지를 히스토리에 추가해줘',
+      action: 'upload',
       user_id: userId,
       image_base64: imageBase64,
       record_date: recordDate,
@@ -187,7 +187,7 @@ app.post(`${BASE_PATH}/generate`, async (req: Request, res: Response) => {
     console.log(`[API] Generating image from text...`);
     
     const result = await invokeImageAgent({
-      content: '이미지 미리보기 생성해줘',
+      action: 'generate',
       text: text || positivePrompt,
     });
 
@@ -212,7 +212,7 @@ app.post(`${BASE_PATH}/build-prompt`, async (req: Request, res: Response) => {
     }
 
     const result = await invokeImageAgent({
-      content: '프롬프트만 생성해줘',
+      action: 'prompt',
       text: text,
     });
 
