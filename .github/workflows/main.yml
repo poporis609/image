@@ -6,8 +6,8 @@ on:
       - main
 
 env:
-  AWS_REGION: us-east-1
-  ECR_REPOSITORY: image-generator
+  AWS_REGION: ap-northeast-2
+  ECR_REPOSITORY: image-generator-api
 
 permissions:
   contents: write
