@@ -94,15 +94,19 @@ async function uploadToS3(userId: string, imageBase64: string, recordDate?: stri
 /**
  * S3에서 이미지 삭제
  */
-async function deleteFromS3(s3Url: string): Promise<boolean> {
+async function deleteFromS3(s3UrlOrKey: string): Promise<boolean> {
   try {
-    // URL에서 S3 key 추출
-    const parts = s3Url.split('.amazonaws.com/');
-    if (parts.length < 2) {
-      console.warn(`[S3] Invalid S3 URL format: ${s3Url}`);
-      return false;
+    let s3Key: string;
+    
+    // URL인지 key인지 판단
+    if (s3UrlOrKey.includes('.amazonaws.com/')) {
+      // 전체 URL인 경우 key 추출
+      const parts = s3UrlOrKey.split('.amazonaws.com/');
+      s3Key = parts[1];
+    } else {
+      // 이미 key인 경우 그대로 사용
+      s3Key = s3UrlOrKey;
     }
-    const s3Key = parts[1];
     
     await s3Client.send(new DeleteObjectCommand({
       Bucket: S3_BUCKET,
