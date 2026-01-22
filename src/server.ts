@@ -8,6 +8,7 @@ import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -21,6 +22,28 @@ const S3_BUCKET = process.env.S3_BUCKET || 'knowledge-base-test-6575574';
 const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
 
 const s3Client = new S3Client({ region: AWS_REGION });
+const lambdaClient = new LambdaClient({ region: AWS_REGION });
+
+/**
+ * Lambda를 통해 DB 업데이트
+ */
+async function updateHistoryS3Key(historyId: number, s3Key: string): Promise<boolean> {
+  try {
+    const query = `UPDATE history SET s3_key = '${s3Key}' WHERE id = ${historyId}`;
+    
+    const response = await lambdaClient.send(new InvokeCommand({
+      FunctionName: 'QueryDatabase',
+      Payload: JSON.stringify({ query }),
+    }));
+    
+    const result = JSON.parse(new TextDecoder().decode(response.Payload));
+    console.log(`[DB] Updated history ${historyId} with s3_key: ${s3Key}`);
+    return result.statusCode === 200;
+  } catch (error) {
+    console.error(`[DB] Update error:`, error);
+    return false;
+  }
+}
 
 /**
  * FastAPI Agent 서버 호출
@@ -292,6 +315,10 @@ app.post(`${BASE_PATH}/histories/:id/confirm-image`, async (req: Request, res: R
     // 2. 새 이미지 S3 업로드
     const { s3Key, imageUrl } = await uploadToS3(userId, imageBase64, recordDate);
 
+    // 3. DB에 s3_key 업데이트
+    const dbUpdated = await updateHistoryS3Key(historyId, s3Key);
+    console.log(`[API] DB updated: ${dbUpdated}`);
+
     res.json({
       success: true,
       data: {
@@ -300,6 +327,7 @@ app.post(`${BASE_PATH}/histories/:id/confirm-image`, async (req: Request, res: R
         s3Key,
         imageUrl,
         deletedCount,
+        dbUpdated,
       }
     });
   } catch (error) {
