@@ -5,17 +5,17 @@
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc';
-import * as resources from '@opentelemetry/resources';
-import * as semconv from '@opentelemetry/semantic-conventions';
+import { resourceFromAttributes } from '@opentelemetry/resources';
+import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 
 const serviceName = process.env.OTEL_SERVICE_NAME || 'image-generator-api';
 const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:4317';
 
 console.log(`[Tracing] Initializing OpenTelemetry - service: ${serviceName}, endpoint: ${otlpEndpoint}`);
 
-const resource = new resources.Resource({
-  [semconv.SEMRESATTRS_SERVICE_NAME]: serviceName,
-  [semconv.SEMRESATTRS_SERVICE_VERSION]: process.env.APP_VERSION || '1.0.0',
+const resource = resourceFromAttributes({
+  [ATTR_SERVICE_NAME]: serviceName,
+  [ATTR_SERVICE_VERSION]: process.env.APP_VERSION || '1.0.0',
 });
 
 const sdk = new NodeSDK({
