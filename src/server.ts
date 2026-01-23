@@ -4,6 +4,9 @@
  * FastAPI Agent 서버 프록시 + S3 이미지 관리
  */
 
+// OpenTelemetry must be imported first
+import './tracing';
+
 import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';

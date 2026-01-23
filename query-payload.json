@@ -1,1 +1,1 @@
-{"query": "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'history'"}
+{"query": "SELECT id, s3_key, record_date, user_id FROM history ORDER BY id DESC LIMIT 10"}
