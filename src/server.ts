@@ -193,11 +193,24 @@ async function deleteExistingImagesInFolder(userId: string, recordDate?: string)
   }
 }
 
-// Middleware
+// CORS Middleware - ALB doesn't handle preflight, so we need explicit handling
+const allowedOrigins = ['https://api.aws11.shop', 'https://www.aws11.shop', 'https://web.aws11.shop'];
+
 app.use(cors({
-  origin: ['https://api.aws11.shop', 'https://www.aws11.shop', 'https://web.aws11.shop'],
-  credentials: true
+  origin: allowedOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }));
+
+// Explicit OPTIONS preflight handler for all routes
+app.options('*', cors({
+  origin: allowedOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+}));
+
 app.use(express.json({ limit: '50mb' }));
 
 // Request logging
